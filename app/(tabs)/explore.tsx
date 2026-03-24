@@ -1,112 +1,187 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+import { useCountdownContext } from '@/context/countdown-context';
+import { CATEGORY_COLORS, CATEGORY_LABELS } from '@/types/countdown';
+import { AppColors, Spacing, Radius } from '@/constants/theme';
 
-export default function TabTwoScreen() {
+export default function ArchiveScreen() {
+  const { archivedCountdowns, deleteCountdown } = useCountdownContext();
+
+  const handleDelete = (id: string) => {
+    Alert.alert('Remove from Archive', 'Permanently delete this record?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deleteCountdown(id) },
+    ]);
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Archive</Text>
+        <Text style={styles.headerSub}>
+          {archivedCountdowns.length > 0
+            ? `${archivedCountdowns.length} completed countdown${archivedCountdowns.length !== 1 ? 's' : ''}`
+            : 'Nothing here yet'}
+        </Text>
+      </View>
+
+      {archivedCountdowns.length === 0 ? (
+        <Animated.View entering={FadeIn} style={styles.empty}>
+          <Text style={styles.emptyIcon}>🏁</Text>
+          <Text style={styles.emptyTitle}>No completed countdowns</Text>
+          <Text style={styles.emptySub}>
+            Countdowns that reach zero will appear here automatically
+          </Text>
+        </Animated.View>
+      ) : (
+        <FlatList
+          data={archivedCountdowns}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item, index }) => {
+            const accentColor = CATEGORY_COLORS[item.category];
+            const targetDate  = new Date(item.targetDate);
+            const archivedDate = item.archivedAt ? new Date(item.archivedAt) : null;
+
+            return (
+              <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onLongPress={() => handleDelete(item.id)}
+                  style={[styles.card, { borderLeftColor: accentColor }]}>
+                  <View style={styles.row}>
+                    <View style={[styles.badge, { backgroundColor: accentColor + '22' }]}>
+                      <Text style={[styles.badgeText, { color: accentColor }]}>
+                        {CATEGORY_LABELS[item.category]}
+                      </Text>
+                    </View>
+                    <Text style={styles.checkmark}>✅</Text>
+                  </View>
+
+                  <Text style={styles.title}>{item.title}</Text>
+
+                  <Text style={styles.dateText}>
+                    📅 {targetDate.toLocaleDateString(undefined, {
+                      month: 'long', day: 'numeric', year: 'numeric',
+                    })}
+                  </Text>
+
+                  {archivedDate && (
+                    <Text style={styles.completedText}>
+                      Completed {archivedDate.toLocaleDateString(undefined, {
+                        month: 'short', day: 'numeric', year: 'numeric',
+                      })}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          }}
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  safe: {
+    flex: 1,
+    backgroundColor: AppColors.bg,
   },
-  titleContainer: {
+  header: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
+  },
+  headerTitle: {
+    color: AppColors.text,
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  headerSub: {
+    color: AppColors.textMuted,
+    fontSize: 14,
+    marginTop: 2,
+  },
+  list: {
+    paddingHorizontal: Spacing.md,
+    paddingBottom: 32,
+  },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.xl,
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: Spacing.md,
+  },
+  emptyTitle: {
+    color: AppColors.text,
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: Spacing.sm,
+  },
+  emptySub: {
+    color: AppColors.textMuted,
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  card: {
+    backgroundColor: AppColors.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderLeftWidth: 4,
+    opacity: 0.85,
+  },
+  row: {
     flexDirection: 'row',
-    gap: 8,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  badge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  checkmark: {
+    fontSize: 16,
+  },
+  title: {
+    color: AppColors.text,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: Spacing.sm,
+  },
+  dateText: {
+    color: AppColors.textMuted,
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  completedText: {
+    color: AppColors.textMuted,
+    fontSize: 12,
+    fontStyle: 'italic',
   },
 });

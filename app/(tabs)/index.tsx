@@ -1,98 +1,146 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useCallback } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { useCountdownContext } from '@/context/countdown-context';
+import { CountdownCard } from '@/components/countdown-card';
+import { AppColors, Spacing, Radius } from '@/constants/theme';
 
-export default function HomeScreen() {
+export default function TimersScreen() {
+  const { activeCountdowns, deleteCountdown, archiveCountdown, loading } = useCountdownContext();
+  const router = useRouter();
+
+  const handleDelete  = useCallback((id: string) => deleteCountdown(id),  [deleteCountdown]);
+  const handleArchive = useCallback((id: string) => archiveCountdown(id), [archiveCountdown]);
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <SafeAreaView style={styles.safe}>
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerTitle}>Countdowns</Text>
+          <Text style={styles.headerSub}>
+            {activeCountdowns.length > 0
+              ? `${activeCountdowns.length} active timer${activeCountdowns.length !== 1 ? 's' : ''}`
+              : 'No active timers'}
+          </Text>
+        </View>
+      </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      {/* ── List ── */}
+      {loading ? null : activeCountdowns.length === 0 ? (
+        <Animated.View entering={FadeIn} style={styles.empty}>
+          <Text style={styles.emptyIcon}>⏳</Text>
+          <Text style={styles.emptyTitle}>Nothing counting down yet</Text>
+          <Text style={styles.emptySub}>
+            Tap the + button to add your first countdown
+          </Text>
+        </Animated.View>
+      ) : (
+        <FlatList
+          data={activeCountdowns}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.list}
+          renderItem={({ item, index }) => (
+            <CountdownCard
+              countdown={item}
+              index={index}
+              onDelete={handleDelete}
+              onArchive={handleArchive}
+            />
+          )}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+
+      {/* ── FAB ── */}
+      <TouchableOpacity
+        id="add-countdown-fab"
+        style={styles.fab}
+        activeOpacity={0.85}
+        onPress={() => router.push('/modal')}>
+        <Text style={styles.fabIcon}>＋</Text>
+      </TouchableOpacity>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  safe: {
+    flex: 1,
+    backgroundColor: AppColors.bg,
+  },
+  header: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
+  },
+  headerTitle: {
+    color: AppColors.text,
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  headerSub: {
+    color: AppColors.textMuted,
+    fontSize: 14,
+    marginTop: 2,
+  },
+  list: {
+    paddingHorizontal: Spacing.md,
+    paddingBottom: 100,
+  },
+  empty: {
+    flex: 1,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.xl,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: Spacing.md,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
+  emptyTitle: {
+    color: AppColors.text,
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: Spacing.sm,
+  },
+  emptySub: {
+    color: AppColors.textMuted,
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  fab: {
     position: 'absolute',
+    bottom: 32,
+    right: 24,
+    width: 62,
+    height: 62,
+    borderRadius: Radius.full,
+    backgroundColor: AppColors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: AppColors.accent,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  fabIcon: {
+    color: '#fff',
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: '300',
   },
 });
