@@ -9,7 +9,7 @@ import { CountdownProvider } from '@/context/countdown-context';
 import { requestNotificationPermissions } from '@/hooks/use-notifications';
 
 export const unstable_settings = {
-  anchor: '(tabs)',
+  initialRouteName: '(tabs)',
 };
 
 export default function RootLayout() {

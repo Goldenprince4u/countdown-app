@@ -41,7 +41,7 @@ export default function AddCountdownModal() {
   const [saving, setSaving]           = useState(false);
 
   const onDateChange = (_: DateTimePickerEvent, selected?: Date) => {
-    if (Platform.OS === 'android') setShowDatePicker(false);
+    setShowDatePicker(false);
     if (selected) {
       const merged = new Date(selected);
       merged.setHours(targetDate.getHours(), targetDate.getMinutes(), 0, 0);
@@ -50,7 +50,7 @@ export default function AddCountdownModal() {
   };
 
   const onTimeChange = (_: DateTimePickerEvent, selected?: Date) => {
-    if (Platform.OS === 'android') setShowTimePicker(false);
+    setShowTimePicker(false);
     if (selected) {
       const merged = new Date(targetDate);
       merged.setHours(selected.getHours(), selected.getMinutes(), 0, 0);

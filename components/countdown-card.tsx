@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -37,16 +37,23 @@ export function CountdownCard({ countdown, index, onDelete, onArchive }: Props) 
   const [remaining, setRemaining] = useState(() => getTimeRemaining(countdown.targetDate));
   const scale = useSharedValue(1);
 
+  const isMounted = useRef(true);
+
   useEffect(() => {
+    isMounted.current = true;
     const interval = setInterval(() => {
       const t = getTimeRemaining(countdown.targetDate);
+      if (!isMounted.current) return;
       setRemaining(t);
       if (t.isExpired) {
         clearInterval(interval);
         onArchive(countdown.id);
       }
     }, 1000);
-    return () => clearInterval(interval);
+    return () => {
+      isMounted.current = false;
+      clearInterval(interval);
+    };
   }, [countdown.targetDate, countdown.id, onArchive]);
 
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
