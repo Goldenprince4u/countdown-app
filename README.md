@@ -16,10 +16,10 @@ A modern, beautifully designed React Native application built with [Expo](https:
 
 ## Tech Stack
 
-- **Framework**: React Native with [Expo SDK 54](https://expo.dev/)
+- **Framework**: React Native with [Expo SDK 52](https://expo.dev/)
 - **Routing**: Expo Router (File-based navigation)
 - **State/Data**: React Context + `@react-native-async-storage/async-storage`
-- **Animations**: `react-native-reanimated` 3.x
+- **Animations**: `react-native-reanimated`
 - **Date/Time Picker**: `@react-native-community/datetimepicker`
 - **Notifications**: `expo-notifications`
 
@@ -27,7 +27,7 @@ A modern, beautifully designed React Native application built with [Expo](https:
 
 ## 🚀 Getting Started
 
-Because this project utilizes custom Native Modules (like AsyncStorage and Notifications) and uses Expo SDK 54, it requires a **Development Build** rather than the standard Expo Go app.
+This project is built with **Expo SDK 52** and is fully compatible with the standard **Expo Go** app on your phone. No custom development build is required!
 
 ### 1. Installation
 
@@ -39,19 +39,7 @@ cd countdown-app
 npm install
 ```
 
-### 2. Build the Dev Client (Android)
-
-You must build the custom development application APK so that the native modules are compiled into your app binary.
-
-*Ensure you are logged into EAS CLI (`npx eas-cli login`) first.*
-
-```bash
-npm run build:android
-```
-
-Once the build finishes in the Expo cloud, download the provided `.apk` link to your Android device and install it.
-
-### 3. Run the Development Server
+### 2. Run the Development Server
 
 Start the Metro Bundler:
 
@@ -59,7 +47,7 @@ Start the Metro Bundler:
 npm start
 ```
 
-Open the newly installed "Countdown" dev client app on your Android device and scan the QR code displayed in your terminal.
+Open the **Expo Go** app on your Android or iOS device and scan the QR code displayed in your terminal.
 
 ---
 
@@ -90,7 +78,7 @@ npm start -- --clear
 ```
 
 **App crashes immediately on launch**
-You are likely using a Dev Client APK that does not have the native code for `expo-notifications` or `async-storage` built into it. Ensure you run `npm run build:android` and install the latest APK on your device.
+Ensure you are using an Expo Go version that supports SDK 52, or build your own custom dev client using `npm run start:dev` and EAS.
 
 ---
 
