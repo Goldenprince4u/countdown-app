@@ -6,6 +6,8 @@ import type { Countdown } from '@/types/countdown';
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -15,11 +17,24 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('countdown-reminders', {
       name: 'Countdown Reminders',
-      importance: Notifications.AndroidImportance.DEFAULT,
+      importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
+      bypassDnd: true,
+      sound: 'default',
+      audioAttributes: {
+        usage: Notifications.AndroidAudioUsage.ALARM,
+        contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+      },
+      lightColor: '#6C63FF',
     });
   }
-  const { status } = await Notifications.requestPermissionsAsync();
+  const { status } = await Notifications.requestPermissionsAsync({
+    ios: {
+      allowAlert: true,
+      allowBadge: true,
+      allowSound: true,
+    },
+  });
   return status === 'granted';
 }
 
@@ -50,6 +65,9 @@ export async function scheduleCountdownNotifications(
         title: `⏳ ${countdown.title}`,
         body: "Your countdown is still ticking — open the app to see how close you are!",
         data: { countdownId: countdown.id },
+        sound: 'default',
+        interruptionLevel: 'timeSensitive',
+        priority: Notifications.AndroidNotificationPriority.MAX,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -64,6 +82,9 @@ export async function scheduleCountdownNotifications(
         title: `🎉 ${countdown.title} is today!`,
         body: "The moment you've been counting down to has arrived!",
         data: { countdownId: countdown.id },
+        sound: 'default',
+        interruptionLevel: 'timeSensitive',
+        priority: Notifications.AndroidNotificationPriority.MAX,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
