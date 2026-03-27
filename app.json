@@ -44,7 +44,8 @@
           "icon": "./assets/images/icon.png",
           "color": "#6C63FF",
           "androidMode": "default",
-          "androidCollapsedTitle": "Countdown Reminder"
+          "androidCollapsedTitle": "Countdown Reminder",
+          "sounds": []
         }
       ],
       "expo-font"
