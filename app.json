@@ -9,6 +9,7 @@
     "scheme": "countdownapp",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.goldenprince4u.countdownapp",
       "supportsTablet": true
     },
     "android": {

@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { CountdownProvider } from '@/context/countdown-context';
+import { TickerProvider } from '@/context/ticker-context';
 import { requestNotificationPermissions } from '@/hooks/use-notifications';
 
 export const unstable_settings = {
@@ -21,8 +22,9 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <CountdownProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <TickerProvider>
+      <CountdownProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
@@ -30,8 +32,9 @@ export default function RootLayout() {
             options={{ presentation: 'modal', title: 'New Countdown', headerShown: false }}
           />
         </Stack>
-        <StatusBar style="light" />
-      </ThemeProvider>
-    </CountdownProvider>
+          <StatusBar style="light" />
+        </ThemeProvider>
+      </CountdownProvider>
+    </TickerProvider>
   );
 }

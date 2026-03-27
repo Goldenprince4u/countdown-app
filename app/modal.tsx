@@ -10,11 +10,13 @@ import {
   Alert,
   Platform,
   Image,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { useCountdownContext } from '@/context/countdown-context';
 import {
@@ -25,6 +27,9 @@ import {
 } from '@/types/countdown';
 import { AppColors, Spacing, Radius } from '@/constants/theme';
 
+// Minimum buffer in ms — date must be at least 60 seconds in the future
+const MIN_DATE_BUFFER_MS = 60 * 1000;
+
 export default function AddCountdownModal() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -34,8 +39,9 @@ export default function AddCountdownModal() {
   const isEditing = !!id;
   const existing = isEditing ? countdowns.find(c => c.id === id) : undefined;
 
-  const [title, setTitle]             = useState(existing?.title ?? '');
-  const [targetDate, setTargetDate]   = useState<Date>(() => {
+  const [title, setTitle] = useState(existing?.title ?? '');
+  const [notes, setNotes] = useState(existing?.notes ?? '');
+  const [targetDate, setTargetDate] = useState<Date>(() => {
     if (existing) return new Date(existing.targetDate);
     const d = new Date();
     d.setDate(d.getDate() + 30);
@@ -49,6 +55,7 @@ export default function AddCountdownModal() {
   const [saving, setSaving]           = useState(false);
   const [backgroundImageUri, setBackgroundImageUri] = useState<string | undefined>(existing?.backgroundImageUri);
   const [repeatInterval, setRepeatInterval] = useState<'yearly' | 'monthly' | 'weekly' | undefined>(existing?.repeatInterval);
+  const [alarmDuration, setAlarmDuration] = useState<number>(existing?.alarmDuration ?? 15);
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -58,7 +65,11 @@ export default function AddCountdownModal() {
     });
 
     if (!result.canceled) {
-      setBackgroundImageUri(result.assets[0].uri);
+      const uri = result.assets[0].uri;
+      const filename = uri.split('/').pop() || 'photo.jpg';
+      const newUri = FileSystem.documentDirectory + filename;
+      await FileSystem.copyAsync({ from: uri, to: newUri });
+      setBackgroundImageUri(newUri);
     }
   };
 
@@ -90,30 +101,31 @@ export default function AddCountdownModal() {
       Alert.alert('Missing title', 'Please enter a name for your countdown.');
       return;
     }
-    if (targetDate <= new Date()) {
-      Alert.alert('Invalid date', 'Please pick a date in the future.');
+
+    // Use a 60-second buffer so dates that are valid now but would be
+    // immediately rejected by the notification scheduler are caught here.
+    if (targetDate.getTime() - Date.now() < MIN_DATE_BUFFER_MS) {
+      Alert.alert('Invalid date', 'Please pick a date at least 1 minute in the future.');
       return;
     }
+
     setSaving(true);
     try {
+      const payload = {
+        title: title.trim(),
+        targetDate: targetDate.toISOString(),
+        category,
+        notificationsEnabled: notifications,
+        backgroundImageUri,
+        repeatInterval,
+        notes: notes.trim() || undefined,
+        alarmDuration,
+      };
+
       if (isEditing && id) {
-        await updateCountdown(id, {
-          title: title.trim(),
-          targetDate: targetDate.toISOString(),
-          category,
-          notificationsEnabled: notifications,
-          backgroundImageUri,
-          repeatInterval,
-        });
+        await updateCountdown(id, payload);
       } else {
-        await addCountdown({
-          title: title.trim(),
-          targetDate: targetDate.toISOString(),
-          category,
-          notificationsEnabled: notifications,
-          backgroundImageUri,
-          repeatInterval,
-        });
+        await addCountdown(payload);
       }
       router.back();
     } catch (e: any) {
@@ -158,15 +170,29 @@ export default function AddCountdownModal() {
           value={title}
           onChangeText={setTitle}
           maxLength={60}
+          returnKeyType="next"
+        />
+
+        {/* ── Notes (new) ── */}
+        <Text style={styles.label}>Notes (optional)</Text>
+        <TextInput
+          style={[styles.input, styles.notesInput]}
+          placeholder="e.g. Flight number BA123, hotel address…"
+          placeholderTextColor={AppColors.textMuted}
+          value={notes}
+          onChangeText={setNotes}
+          maxLength={200}
+          multiline
           returnKeyType="done"
+          blurOnSubmit
         />
 
         {/* ── Background Photo ── */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={styles.labelRow}>
           <Text style={styles.label}>Background Photo</Text>
           {backgroundImageUri && (
             <TouchableOpacity onPress={() => setBackgroundImageUri(undefined)}>
-              <Text style={{ color: AppColors.textMuted, fontSize: 13, marginTop: Spacing.md }}>Remove</Text>
+              <Text style={styles.removeText}>Remove</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -176,11 +202,11 @@ export default function AddCountdownModal() {
             {backgroundImageUri ? 'Photo Selected (Tap to change)' : 'Select Photo from Gallery'}
           </Text>
         </TouchableOpacity>
-        
+
         {backgroundImageUri && (
-          <Image 
-            source={{ uri: backgroundImageUri }} 
-            style={{ width: '100%', height: 120, borderRadius: Radius.md, marginTop: Spacing.sm }} 
+          <Image
+            source={{ uri: backgroundImageUri }}
+            style={styles.imagePreview}
             resizeMode="cover"
           />
         )}
@@ -195,15 +221,35 @@ export default function AddCountdownModal() {
           <Text style={styles.pickerText}>{dateLabel}</Text>
         </TouchableOpacity>
 
-        {showDatePicker && (
-          <DateTimePicker
-            value={targetDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            minimumDate={new Date()}
-            onChange={onDateChange}
-            themeVariant="dark"
-          />
+        {Platform.OS === 'ios' ? (
+          <Modal visible={showDatePicker} transparent animationType="slide">
+            <View style={styles.modalOverlay}>
+              <View style={styles.pickerContainer}>
+                <View style={styles.pickerHeader}>
+                  <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                    <Text style={styles.pickerDoneBtn}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={targetDate}
+                  mode="date"
+                  display="inline"
+                  onChange={onDateChange}
+                  themeVariant="dark"
+                />
+              </View>
+            </View>
+          </Modal>
+        ) : (
+          showDatePicker && (
+            <DateTimePicker
+              value={targetDate}
+              mode="date"
+              display="default"
+              onChange={onDateChange}
+              themeVariant="dark"
+            />
+          )
         )}
 
         {/* ── Time ── */}
@@ -216,14 +262,35 @@ export default function AddCountdownModal() {
           <Text style={styles.pickerText}>{timeLabel}</Text>
         </TouchableOpacity>
 
-        {showTimePicker && (
-          <DateTimePicker
-            value={targetDate}
-            mode="time"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={onTimeChange}
-            themeVariant="dark"
-          />
+        {Platform.OS === 'ios' ? (
+          <Modal visible={showTimePicker} transparent animationType="slide">
+            <View style={styles.modalOverlay}>
+              <View style={styles.pickerContainer}>
+                <View style={styles.pickerHeader}>
+                  <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                    <Text style={styles.pickerDoneBtn}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={targetDate}
+                  mode="time"
+                  display="spinner"
+                  onChange={onTimeChange}
+                  themeVariant="dark"
+                />
+              </View>
+            </View>
+          </Modal>
+        ) : (
+          showTimePicker && (
+            <DateTimePicker
+              value={targetDate}
+              mode="time"
+              display="default"
+              onChange={onTimeChange}
+              themeVariant="dark"
+            />
+          )
         )}
 
         {/* ── Category ── */}
@@ -260,6 +327,29 @@ export default function AddCountdownModal() {
               <TouchableOpacity
                 key={interval ?? 'none'}
                 onPress={() => setRepeatInterval(interval as any)}
+                style={[
+                  styles.categoryChip,
+                  { borderColor: isSelected ? AppColors.accent : AppColors.border },
+                  isSelected && { backgroundColor: AppColors.accent + '33' },
+                ]}>
+                <Text style={[styles.categoryChipText, { color: isSelected ? AppColors.accent : AppColors.textMuted }]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* ── Alarm Duration ── */}
+        <Text style={styles.label}>Alarm Duration</Text>
+        <View style={styles.categoryGrid}>
+          {([15, 30, 60, 180] as const).map(secs => {
+            const isSelected = alarmDuration === secs;
+            const label = secs < 60 ? `${secs}s` : `${secs / 60}m`;
+            return (
+              <TouchableOpacity
+                key={secs}
+                onPress={() => setAlarmDuration(secs)}
                 style={[
                   styles.categoryChip,
                   { borderColor: isSelected ? AppColors.accent : AppColors.border },
@@ -332,6 +422,12 @@ const styles = StyleSheet.create({
     maxWidth: 600,
     alignSelf: 'center',
   },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: Spacing.md,
+  },
   label: {
     color: AppColors.textMuted,
     fontSize: 12,
@@ -339,6 +435,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
     marginTop: Spacing.md,
+    marginBottom: 6,
+  },
+  removeText: {
+    color: AppColors.textMuted,
+    fontSize: 13,
     marginBottom: 6,
   },
   input: {
@@ -350,6 +451,17 @@ const styles = StyleSheet.create({
     fontSize: 17,
     borderWidth: 1,
     borderColor: AppColors.border,
+  },
+  notesInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+    fontSize: 15,
+  },
+  imagePreview: {
+    width: '100%',
+    height: 120,
+    borderRadius: Radius.md,
+    marginTop: Spacing.sm,
   },
   pickerBtn: {
     backgroundColor: AppColors.surface,
@@ -404,5 +516,28 @@ const styles = StyleSheet.create({
   switchSub: {
     color: AppColors.textMuted,
     fontSize: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  pickerContainer: {
+    backgroundColor: AppColors.surface,
+    paddingBottom: 20,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: AppColors.border,
+  },
+  pickerDoneBtn: {
+    color: AppColors.accent,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

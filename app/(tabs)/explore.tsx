@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,18 @@ import { useCountdownContext } from '@/context/countdown-context';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from '@/types/countdown';
 import { AppColors, Spacing, Radius } from '@/constants/theme';
 
+type SortOption = 'newest' | 'oldest' | 'alpha';
+
+const SORT_LABELS: Record<SortOption, string> = {
+  newest: 'Newest',
+  oldest: 'Oldest',
+  alpha:  'A–Z',
+};
+
 export default function ArchiveScreen() {
   const { archivedCountdowns, deleteCountdown, updateCountdown } = useCountdownContext();
   const insets = useSafeAreaInsets();
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
 
   const handleLongPress = (id: string, title: string) => {
     Alert.alert(title, 'What would you like to do?', [
@@ -36,6 +45,18 @@ export default function ArchiveScreen() {
     ]);
   };
 
+  const sorted = [...archivedCountdowns].sort((a, b) => {
+    if (sortBy === 'newest') {
+      return new Date(b.archivedAt ?? b.createdAt).getTime() -
+             new Date(a.archivedAt ?? a.createdAt).getTime();
+    }
+    if (sortBy === 'oldest') {
+      return new Date(a.archivedAt ?? a.createdAt).getTime() -
+             new Date(b.archivedAt ?? b.createdAt).getTime();
+    }
+    return a.title.localeCompare(b.title);
+  });
+
   return (
     <View style={[styles.safe, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.header}>
@@ -47,6 +68,29 @@ export default function ArchiveScreen() {
         </Text>
       </View>
 
+      {/* ── Sort Controls ── */}
+      {archivedCountdowns.length > 1 && (
+        <View style={styles.sortRow}>
+          {(Object.keys(SORT_LABELS) as SortOption[]).map(opt => (
+            <TouchableOpacity
+              key={opt}
+              onPress={() => setSortBy(opt)}
+              style={[
+                styles.sortChip,
+                sortBy === opt && { backgroundColor: AppColors.accent + '33', borderColor: AppColors.accent },
+              ]}>
+              <Text
+                style={[
+                  styles.sortChipText,
+                  sortBy === opt && { color: AppColors.accent },
+                ]}>
+                {SORT_LABELS[opt]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {archivedCountdowns.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>🏁</Text>
@@ -57,13 +101,13 @@ export default function ArchiveScreen() {
         </View>
       ) : (
         <FlatList
-          data={archivedCountdowns}
+          data={sorted}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => {
             const accentColor = CATEGORY_COLORS[item.category];
-            const targetDate  = new Date(item.targetDate);
+            const targetDate = new Date(item.targetDate);
             const archivedDate = item.archivedAt ? new Date(item.archivedAt) : null;
 
             return (
@@ -82,16 +126,29 @@ export default function ArchiveScreen() {
 
                 <Text style={styles.title}>{item.title}</Text>
 
+                {/* Show notes if present */}
+                {item.notes ? (
+                  <Text style={styles.notesText} numberOfLines={2}>
+                    📝 {item.notes}
+                  </Text>
+                ) : null}
+
                 <Text style={styles.dateText}>
-                  📅 {targetDate.toLocaleDateString(undefined, {
-                    month: 'long', day: 'numeric', year: 'numeric',
+                  📅{' '}
+                  {targetDate.toLocaleDateString(undefined, {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
                   })}
                 </Text>
 
                 {archivedDate && (
                   <Text style={styles.completedText}>
-                    Completed {archivedDate.toLocaleDateString(undefined, {
-                      month: 'short', day: 'numeric', year: 'numeric',
+                    Completed{' '}
+                    {archivedDate.toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
                     })}
                   </Text>
                 )}
@@ -114,7 +171,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
+    paddingBottom: Spacing.sm,
   },
   headerTitle: {
     color: AppColors.text,
@@ -126,6 +183,24 @@ const styles = StyleSheet.create({
     color: AppColors.textMuted,
     fontSize: 14,
     marginTop: 2,
+  },
+  sortRow: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  sortChip: {
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 5,
+  },
+  sortChipText: {
+    color: AppColors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
   },
   list: {
     paddingHorizontal: Spacing.md,
@@ -200,6 +275,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginBottom: Spacing.sm,
+  },
+  notesText: {
+    color: AppColors.textMuted,
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginBottom: Spacing.xs,
+    lineHeight: 18,
   },
   dateText: {
     color: AppColors.textMuted,

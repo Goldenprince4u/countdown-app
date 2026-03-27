@@ -30,13 +30,17 @@ export interface Countdown {
   targetDate: string; // ISO string
   category: CountdownCategory;
   notificationsEnabled: boolean;
-  dailyNotificationId?: string;
+  dailyNotificationIds?: string[];
   completionNotificationId?: string;
   createdAt: string; // ISO string
   archivedAt?: string; // ISO string – set when the timer completes
   backgroundImageUri?: string; // Local URI for custom photo background
   repeatInterval?: 'yearly' | 'monthly' | 'weekly';
+  notes?: string;
+  /** How long (in seconds) to ring the alarm when the countdown hits zero. Default 15. */
+  alarmDuration?: number;
 }
+
 
 export interface TimeRemaining {
   total: number; // milliseconds
@@ -47,8 +51,8 @@ export interface TimeRemaining {
   isExpired: boolean;
 }
 
-export function getTimeRemaining(targetDate: string): TimeRemaining {
-  const total = new Date(targetDate).getTime() - Date.now();
+export function getTimeRemaining(targetDate: string, now: number = Date.now()): TimeRemaining {
+  const total = new Date(targetDate).getTime() - now;
   if (total <= 0) {
     return { total: 0, days: 0, hours: 0, minutes: 0, seconds: 0, isExpired: true };
   }

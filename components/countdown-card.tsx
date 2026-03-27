@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Share,
 } from 'react-native';
 import * as Linking from 'expo-linking';
+import * as Haptics from 'expo-haptics';
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
@@ -19,6 +20,8 @@ import Animated, {
 import type { Countdown } from '@/types/countdown';
 import { CATEGORY_COLORS, CATEGORY_LABELS, getTimeRemaining } from '@/types/countdown';
 import { AppColors, Radius, Spacing } from '@/constants/theme';
+import { useTickerContext } from '@/context/ticker-context';
+import { useAlarm } from '@/hooks/use-alarm';
 
 interface Props {
   countdown: Countdown;
@@ -39,35 +42,28 @@ function TimeUnit({ value, label }: { value: number; label: string }) {
 }
 
 export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, onEdit }: Props) {
-  const [remaining, setRemaining] = useState(() => getTimeRemaining(countdown.targetDate));
+  const now = useTickerContext();
+  const remaining = getTimeRemaining(countdown.targetDate, now);
   const scale = useSharedValue(1);
-
-  const isMounted = useRef(true);
+  const { playAlarm, stopAlarm } = useAlarm();
 
   useEffect(() => {
-    isMounted.current = true;
-    const interval = setInterval(() => {
-      const t = getTimeRemaining(countdown.targetDate);
-      if (!isMounted.current) return;
-      setRemaining(t);
-      if (t.isExpired) {
-        clearInterval(interval);
-        if (countdown.repeatInterval) {
-          onRenew(countdown.id);
-        } else {
-          onArchive(countdown.id);
-        }
+    if (remaining.isExpired && !countdown.archivedAt) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      // Ring the alarm for the user-configured duration (default 15 s)
+      playAlarm(countdown.alarmDuration ?? 15);
+      if (countdown.repeatInterval) {
+        onRenew(countdown.id);
+      } else {
+        onArchive(countdown.id);
       }
-    }, 1000);
-    return () => {
-      isMounted.current = false;
-      clearInterval(interval);
-    };
-  }, [countdown.targetDate, countdown.id, onArchive]);
+    }
+  }, [remaining.isExpired, countdown.id, countdown.archivedAt, countdown.repeatInterval,
+      countdown.alarmDuration, onRenew, onArchive, playAlarm]);
 
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
-  const handleShare = async () => {
+  const handleShare = useCallback(async () => {
     try {
       const url = Linking.createURL('import', {
         queryParams: {
@@ -82,9 +78,9 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [countdown.title, countdown.targetDate, countdown.category]);
 
-  const handleLongPress = () => {
+  const handleLongPress = useCallback(() => {
     scale.value = withSpring(0.97, {}, () => {
       scale.value = withSpring(1);
     });
@@ -107,7 +103,7 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
         { text: 'Cancel', style: 'cancel' },
       ]
     );
-  };
+  }, [countdown.id, countdown.title, handleShare, onArchive, onDelete, onEdit, scale]);
 
   const accentColor = CATEGORY_COLORS[countdown.category];
   const targetDate  = new Date(countdown.targetDate);
@@ -120,8 +116,10 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
   // Progress 0→1 from creation to targetDate
   const created  = new Date(countdown.createdAt).getTime();
   const target   = new Date(countdown.targetDate).getTime();
-  const now      = Date.now();
   const progress = Math.max(0, Math.min(1, (now - created) / (target - created)));
+
+  // Urgent styling when ≤ 1 day remaining
+  const isUrgent = remaining.days === 0 && !remaining.isExpired;
 
   const innerContent = (
     <View style={[styles.innerContainer, countdown.backgroundImageUri ? styles.overlayPadding : null]}>
@@ -132,9 +130,15 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
             {CATEGORY_LABELS[countdown.category]}
           </Text>
         </View>
-        {countdown.notificationsEnabled && (
-          <Text style={styles.bellIcon}>🔔</Text>
-        )}
+        <View style={styles.headerRight}>
+          {isUrgent && <Text style={styles.urgentBadge}>🔥 Today</Text>}
+          {countdown.repeatInterval && (
+            <Text style={styles.repeatBadge}>🔁 {countdown.repeatInterval}</Text>
+          )}
+          {countdown.notificationsEnabled && (
+            <Text style={styles.bellIcon}>🔔</Text>
+          )}
+        </View>
       </View>
 
       {/* Title */}
@@ -162,7 +166,7 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
         <View
           style={[
             styles.progressFill,
-            { width: `${progress * 100}%` as any, backgroundColor: accentColor },
+            { width: `${progress * 100}%` as any, backgroundColor: isUrgent ? '#FF6B6B' : accentColor },
           ]}
         />
       </View>
@@ -180,7 +184,7 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
           onLongPress={handleLongPress}
           style={[
             styles.card, 
-            { borderLeftColor: accentColor },
+            { borderLeftColor: isUrgent ? '#FF6B6B' : accentColor },
             countdown.backgroundImageUri ? { padding: 0, overflow: 'hidden' } : null
           ]}>
           
@@ -230,6 +234,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.sm,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  urgentBadge: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FF6B6B',
+  },
+  repeatBadge: {
+    fontSize: 11,
+    color: AppColors.textMuted,
   },
   categoryBadge: {
     paddingHorizontal: Spacing.sm,
