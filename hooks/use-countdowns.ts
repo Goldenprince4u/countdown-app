@@ -27,10 +27,10 @@ export function useCountdowns() {
     loadCountdowns();
   }, [loadCountdowns]);
 
-  const persist = async (updated: Countdown[]) => {
+  const persist = useCallback(async (updated: Countdown[]) => {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     setCountdowns(updated);
-  };
+  }, []);
 
   const addCountdown = useCallback(
     async (draft: Omit<Countdown, 'id' | 'createdAt'>): Promise<Countdown> => {
@@ -49,67 +49,130 @@ export function useCountdowns() {
         completionNotificationId,
       };
 
-      const updated = [...countdowns, newCountdown];
-      await persist(updated);
+      // Use functional updater to avoid stale closure
+      let saved: Countdown[] = [];
+      setCountdowns(prev => {
+        saved = [...prev, newCountdown];
+        return saved;
+      });
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...saved]));
       return newCountdown;
     },
-    [countdowns]
+    []
   );
 
   const updateCountdown = useCallback(
     async (id: string, changes: Partial<Countdown>): Promise<void> => {
-      const existing = countdowns.find(c => c.id === id);
-      if (!existing) return;
+      setCountdowns(prev => {
+        const existing = prev.find(c => c.id === id);
+        if (!existing) return prev;
+        // Sync update so UI reflects immediately; async notif reschedule below
+        const updated = prev.map(c => (c.id === id ? { ...c, ...changes } : c));
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
 
-      // If notification setting or target date changed, reschedule
+      // Handle notification rescheduling asynchronously
+      const existing = (await AsyncStorage.getItem(STORAGE_KEY));
+      if (!existing) return;
+      const all: Countdown[] = JSON.parse(existing);
+      const target = all.find(c => c.id === id);
+      if (!target) return;
+
       const needsReschedule =
         changes.notificationsEnabled !== undefined || changes.targetDate !== undefined;
-
-      let notifChanges: Partial<Countdown> = {};
       if (needsReschedule) {
-        await cancelCountdownNotifications(existing);
-        const merged = { ...existing, ...changes };
+        await cancelCountdownNotifications(target);
+        const merged = { ...target, ...changes };
         const { dailyNotificationId, completionNotificationId } =
           await scheduleCountdownNotifications(merged);
-        notifChanges = { dailyNotificationId, completionNotificationId };
+        const final = all.map(c =>
+          c.id === id ? { ...c, ...changes, dailyNotificationId, completionNotificationId } : c
+        );
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(final));
+        setCountdowns(final);
       }
-
-      const updated = countdowns.map(c =>
-        c.id === id ? { ...c, ...changes, ...notifChanges } : c
-      );
-      await persist(updated);
     },
-    [countdowns]
+    []
   );
 
   const deleteCountdown = useCallback(
     async (id: string): Promise<void> => {
-      const countdown = countdowns.find(c => c.id === id);
-      if (countdown) await cancelCountdownNotifications(countdown);
-      await persist(countdowns.filter(c => c.id !== id));
+      setCountdowns(prev => {
+        const countdown = prev.find(c => c.id === id);
+        if (countdown) cancelCountdownNotifications(countdown);
+        const updated = prev.filter(c => c.id !== id);
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
     },
-    [countdowns]
+    []
   );
 
   const archiveCountdown = useCallback(
     async (id: string): Promise<void> => {
-      const countdown = countdowns.find(c => c.id === id);
-      if (!countdown) return;
-      await cancelCountdownNotifications(countdown);
-      const updated = countdowns.map(c =>
-        c.id === id
-          ? {
-              ...c,
-              archivedAt: new Date().toISOString(),
-              notificationsEnabled: false,
-              dailyNotificationId: undefined,
-              completionNotificationId: undefined,
-            }
-          : c
-      );
-      await persist(updated);
+      setCountdowns(prev => {
+        const countdown = prev.find(c => c.id === id);
+        if (!countdown) return prev;
+        cancelCountdownNotifications(countdown);
+        const updated = prev.map(c =>
+          c.id === id
+            ? {
+                ...c,
+                archivedAt: new Date().toISOString(),
+                notificationsEnabled: false,
+                dailyNotificationId: undefined,
+                completionNotificationId: undefined,
+              }
+            : c
+        );
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
     },
-    [countdowns]
+    []
+  );
+
+  const renewCountdown = useCallback(
+    async (id: string): Promise<void> => {
+      setCountdowns(prev => {
+        const countdown = prev.find(c => c.id === id);
+        if (!countdown || !countdown.repeatInterval || countdown.archivedAt) return prev;
+
+        const now = new Date();
+        let nextDate = new Date(countdown.targetDate);
+        while (nextDate <= now) {
+          if (countdown.repeatInterval === 'yearly') {
+            nextDate.setFullYear(nextDate.getFullYear() + 1);
+          } else if (countdown.repeatInterval === 'monthly') {
+            nextDate.setMonth(nextDate.getMonth() + 1);
+          } else if (countdown.repeatInterval === 'weekly') {
+            nextDate.setDate(nextDate.getDate() + 7);
+          } else {
+            break;
+          }
+        }
+
+        const changes = { targetDate: nextDate.toISOString() };
+        const updated = prev.map(c => (c.id === id ? { ...c, ...changes } : c));
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        
+        // Asynchronously reschedule notifications for the new date
+        (async () => {
+          await cancelCountdownNotifications(countdown);
+          const merged = { ...countdown, ...changes };
+          const { dailyNotificationId, completionNotificationId } = await scheduleCountdownNotifications(merged);
+          setCountdowns(latest => {
+            const final = latest.map(c => c.id === id ? { ...c, dailyNotificationId, completionNotificationId } : c);
+            AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(final));
+            return final;
+          });
+        })();
+
+        return updated;
+      });
+    },
+    []
   );
 
   return {
@@ -122,5 +185,6 @@ export function useCountdowns() {
     updateCountdown,
     deleteCountdown,
     archiveCountdown,
+    renewCountdown,
   };
 }

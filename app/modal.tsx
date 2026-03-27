@@ -6,13 +6,15 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   Switch,
   Alert,
   Platform,
+  Image,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import * as ImagePicker from 'expo-image-picker';
 
 import { useCountdownContext } from '@/context/countdown-context';
 import {
@@ -25,33 +27,58 @@ import { AppColors, Spacing, Radius } from '@/constants/theme';
 
 export default function AddCountdownModal() {
   const router = useRouter();
-  const { addCountdown } = useCountdownContext();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { addCountdown, updateCountdown, countdowns } = useCountdownContext();
+  const insets = useSafeAreaInsets();
 
-  const [title, setTitle]             = useState('');
+  const isEditing = !!id;
+  const existing = isEditing ? countdowns.find(c => c.id === id) : undefined;
+
+  const [title, setTitle]             = useState(existing?.title ?? '');
   const [targetDate, setTargetDate]   = useState<Date>(() => {
+    if (existing) return new Date(existing.targetDate);
     const d = new Date();
     d.setDate(d.getDate() + 30);
     d.setHours(9, 0, 0, 0);
     return d;
   });
-  const [category, setCategory]       = useState<CountdownCategory>('personal');
-  const [notifications, setNotifications] = useState(true);
+  const [category, setCategory]       = useState<CountdownCategory>(existing?.category ?? 'personal');
+  const [notifications, setNotifications] = useState(existing?.notificationsEnabled ?? true);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [saving, setSaving]           = useState(false);
+  const [backgroundImageUri, setBackgroundImageUri] = useState<string | undefined>(existing?.backgroundImageUri);
+  const [repeatInterval, setRepeatInterval] = useState<'yearly' | 'monthly' | 'weekly' | undefined>(existing?.repeatInterval);
 
-  const onDateChange = (_: DateTimePickerEvent, selected?: Date) => {
-    setShowDatePicker(false);
-    if (selected) {
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setBackgroundImageUri(result.assets[0].uri);
+    }
+  };
+
+  const onDateChange = (event: DateTimePickerEvent, selected?: Date) => {
+    // Only dismiss if not iOS (iOS inline picker shouldn't be hidden)
+    if (Platform.OS !== 'ios') {
+      setShowDatePicker(false);
+    }
+    if (event.type === 'set' && selected) {
       const merged = new Date(selected);
       merged.setHours(targetDate.getHours(), targetDate.getMinutes(), 0, 0);
       setTargetDate(merged);
     }
   };
 
-  const onTimeChange = (_: DateTimePickerEvent, selected?: Date) => {
-    setShowTimePicker(false);
-    if (selected) {
+  const onTimeChange = (event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS !== 'ios') {
+      setShowTimePicker(false);
+    }
+    if (event.type === 'set' && selected) {
       const merged = new Date(targetDate);
       merged.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
       setTargetDate(merged);
@@ -69,15 +96,28 @@ export default function AddCountdownModal() {
     }
     setSaving(true);
     try {
-      await addCountdown({
-        title: title.trim(),
-        targetDate: targetDate.toISOString(),
-        category,
-        notificationsEnabled: notifications,
-      });
+      if (isEditing && id) {
+        await updateCountdown(id, {
+          title: title.trim(),
+          targetDate: targetDate.toISOString(),
+          category,
+          notificationsEnabled: notifications,
+          backgroundImageUri,
+          repeatInterval,
+        });
+      } else {
+        await addCountdown({
+          title: title.trim(),
+          targetDate: targetDate.toISOString(),
+          category,
+          notificationsEnabled: notifications,
+          backgroundImageUri,
+          repeatInterval,
+        });
+      }
       router.back();
-    } catch (e) {
-      Alert.alert('Error', 'Could not save countdown. Please try again.');
+    } catch (e: any) {
+      Alert.alert('Save Failed', e?.message || 'An unexpected error occurred while saving.');
     } finally {
       setSaving(false);
     }
@@ -91,13 +131,13 @@ export default function AddCountdownModal() {
   });
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={[styles.safe, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
       {/* ── Drag handle / top bar ── */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} id="modal-cancel">
           <Text style={styles.topBarCancel}>Cancel</Text>
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>New Countdown</Text>
+        <Text style={styles.topBarTitle}>{isEditing ? 'Edit Countdown' : 'New Countdown'}</Text>
         <TouchableOpacity
           onPress={handleSave}
           disabled={saving}
@@ -120,6 +160,30 @@ export default function AddCountdownModal() {
           maxLength={60}
           returnKeyType="done"
         />
+
+        {/* ── Background Photo ── */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={styles.label}>Background Photo</Text>
+          {backgroundImageUri && (
+            <TouchableOpacity onPress={() => setBackgroundImageUri(undefined)}>
+              <Text style={{ color: AppColors.textMuted, fontSize: 13, marginTop: Spacing.md }}>Remove</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity style={styles.pickerBtn} onPress={pickImage}>
+          <Text style={styles.pickerIcon}>🖼️</Text>
+          <Text style={[styles.pickerText, backgroundImageUri && { color: AppColors.accent }]}>
+            {backgroundImageUri ? 'Photo Selected (Tap to change)' : 'Select Photo from Gallery'}
+          </Text>
+        </TouchableOpacity>
+        
+        {backgroundImageUri && (
+          <Image 
+            source={{ uri: backgroundImageUri }} 
+            style={{ width: '100%', height: 120, borderRadius: Radius.md, marginTop: Spacing.sm }} 
+            resizeMode="cover"
+          />
+        )}
 
         {/* ── Date ── */}
         <Text style={styles.label}>Target Date</Text>
@@ -186,6 +250,29 @@ export default function AddCountdownModal() {
           })}
         </View>
 
+        {/* ── Repeat Options ── */}
+        <Text style={styles.label}>Repeat Countdown</Text>
+        <View style={styles.categoryGrid}>
+          {[undefined, 'weekly', 'monthly', 'yearly'].map(interval => {
+            const isSelected = repeatInterval === interval;
+            const label = interval ? interval.charAt(0).toUpperCase() + interval.slice(1) : 'None';
+            return (
+              <TouchableOpacity
+                key={interval ?? 'none'}
+                onPress={() => setRepeatInterval(interval as any)}
+                style={[
+                  styles.categoryChip,
+                  { borderColor: isSelected ? AppColors.accent : AppColors.border },
+                  isSelected && { backgroundColor: AppColors.accent + '33' },
+                ]}>
+                <Text style={[styles.categoryChipText, { color: isSelected ? AppColors.accent : AppColors.textMuted }]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         {/* ── Notifications ── */}
         <View style={styles.switchRow}>
           <View>
@@ -200,7 +287,7 @@ export default function AddCountdownModal() {
           />
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -241,6 +328,9 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.lg,
     gap: Spacing.sm,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
   },
   label: {
     color: AppColors.textMuted,

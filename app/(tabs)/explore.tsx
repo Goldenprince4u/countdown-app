@@ -4,28 +4,41 @@ import {
   Text,
   FlatList,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   Alert,
+  View,
 } from 'react-native';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCountdownContext } from '@/context/countdown-context';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from '@/types/countdown';
 import { AppColors, Spacing, Radius } from '@/constants/theme';
 
 export default function ArchiveScreen() {
-  const { archivedCountdowns, deleteCountdown } = useCountdownContext();
+  const { archivedCountdowns, deleteCountdown, updateCountdown } = useCountdownContext();
+  const insets = useSafeAreaInsets();
 
-  const handleDelete = (id: string) => {
-    Alert.alert('Remove from Archive', 'Permanently delete this record?', [
+  const handleLongPress = (id: string, title: string) => {
+    Alert.alert(title, 'What would you like to do?', [
+      {
+        text: 'Restore',
+        onPress: () => updateCountdown(id, { archivedAt: undefined }),
+      },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () =>
+          Alert.alert('Delete Record', 'Permanently delete this record? This cannot be undone.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: () => deleteCountdown(id) },
+          ]),
+      },
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteCountdown(id) },
     ]);
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={[styles.safe, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Archive</Text>
         <Text style={styles.headerSub}>
@@ -36,61 +49,61 @@ export default function ArchiveScreen() {
       </View>
 
       {archivedCountdowns.length === 0 ? (
-        <Animated.View entering={FadeIn} style={styles.empty}>
+        <View style={styles.empty}>
           <Text style={styles.emptyIcon}>🏁</Text>
           <Text style={styles.emptyTitle}>No completed countdowns</Text>
           <Text style={styles.emptySub}>
             Countdowns that reach zero will appear here automatically
           </Text>
-        </Animated.View>
+        </View>
       ) : (
         <FlatList
           data={archivedCountdowns}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item, index }) => {
+          renderItem={({ item }) => {
             const accentColor = CATEGORY_COLORS[item.category];
             const targetDate  = new Date(item.targetDate);
             const archivedDate = item.archivedAt ? new Date(item.archivedAt) : null;
 
             return (
-              <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onLongPress={() => handleDelete(item.id)}
-                  style={[styles.card, { borderLeftColor: accentColor }]}>
-                  <View style={styles.row}>
-                    <View style={[styles.badge, { backgroundColor: accentColor + '22' }]}>
-                      <Text style={[styles.badgeText, { color: accentColor }]}>
-                        {CATEGORY_LABELS[item.category]}
-                      </Text>
-                    </View>
-                    <Text style={styles.checkmark}>✅</Text>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onLongPress={() => handleLongPress(item.id, item.title)}
+                style={[styles.card, { borderLeftColor: accentColor }]}>
+                <View style={styles.row}>
+                  <View style={[styles.badge, { backgroundColor: accentColor + '22' }]}>
+                    <Text style={[styles.badgeText, { color: accentColor }]}>
+                      {CATEGORY_LABELS[item.category]}
+                    </Text>
                   </View>
+                  <Text style={styles.checkmark}>✅</Text>
+                </View>
 
-                  <Text style={styles.title}>{item.title}</Text>
+                <Text style={styles.title}>{item.title}</Text>
 
-                  <Text style={styles.dateText}>
-                    📅 {targetDate.toLocaleDateString(undefined, {
-                      month: 'long', day: 'numeric', year: 'numeric',
+                <Text style={styles.dateText}>
+                  📅 {targetDate.toLocaleDateString(undefined, {
+                    month: 'long', day: 'numeric', year: 'numeric',
+                  })}
+                </Text>
+
+                {archivedDate && (
+                  <Text style={styles.completedText}>
+                    Completed {archivedDate.toLocaleDateString(undefined, {
+                      month: 'short', day: 'numeric', year: 'numeric',
                     })}
                   </Text>
+                )}
 
-                  {archivedDate && (
-                    <Text style={styles.completedText}>
-                      Completed {archivedDate.toLocaleDateString(undefined, {
-                        month: 'short', day: 'numeric', year: 'numeric',
-                      })}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </Animated.View>
+                <Text style={styles.longPressHint}>Hold to restore or delete</Text>
+              </TouchableOpacity>
             );
           }}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -118,6 +131,9 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: Spacing.md,
     paddingBottom: 32,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
   },
   empty: {
     flex: 1,
@@ -149,6 +165,18 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     borderLeftWidth: 4,
     opacity: 0.85,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  longPressHint: {
+    color: AppColors.textMuted,
+    fontSize: 10,
+    marginTop: Spacing.sm,
+    fontStyle: 'italic',
+    opacity: 0.6,
   },
   row: {
     flexDirection: 'row',

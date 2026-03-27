@@ -5,7 +5,10 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  ImageBackground,
+  Share,
 } from 'react-native';
+import * as Linking from 'expo-linking';
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
@@ -22,6 +25,8 @@ interface Props {
   index: number;
   onDelete: (id: string) => void;
   onArchive: (id: string) => void;
+  onRenew: (id: string) => void;
+  onEdit: (id: string) => void;
 }
 
 function TimeUnit({ value, label }: { value: number; label: string }) {
@@ -33,7 +38,7 @@ function TimeUnit({ value, label }: { value: number; label: string }) {
   );
 }
 
-export function CountdownCard({ countdown, index, onDelete, onArchive }: Props) {
+export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, onEdit }: Props) {
   const [remaining, setRemaining] = useState(() => getTimeRemaining(countdown.targetDate));
   const scale = useSharedValue(1);
 
@@ -47,7 +52,11 @@ export function CountdownCard({ countdown, index, onDelete, onArchive }: Props) 
       setRemaining(t);
       if (t.isExpired) {
         clearInterval(interval);
-        onArchive(countdown.id);
+        if (countdown.repeatInterval) {
+          onRenew(countdown.id);
+        } else {
+          onArchive(countdown.id);
+        }
       }
     }, 1000);
     return () => {
@@ -58,6 +67,23 @@ export function CountdownCard({ countdown, index, onDelete, onArchive }: Props) 
 
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
+  const handleShare = async () => {
+    try {
+      const url = Linking.createURL('import', {
+        queryParams: {
+          title: countdown.title,
+          date: countdown.targetDate,
+          category: countdown.category
+        }
+      });
+      await Share.share({
+        message: `I'm counting down to ${countdown.title}!\n\nTap this link to add it to your own Countdown App:\n${url}`,
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleLongPress = () => {
     scale.value = withSpring(0.97, {}, () => {
       scale.value = withSpring(1);
@@ -66,6 +92,8 @@ export function CountdownCard({ countdown, index, onDelete, onArchive }: Props) 
       countdown.title,
       'What would you like to do?',
       [
+        { text: 'Share', onPress: handleShare },
+        { text: 'Edit', onPress: () => onEdit(countdown.id) },
         { text: 'Archive', onPress: () => onArchive(countdown.id) },
         {
           text: 'Delete',
@@ -95,57 +123,77 @@ export function CountdownCard({ countdown, index, onDelete, onArchive }: Props) 
   const now      = Date.now();
   const progress = Math.max(0, Math.min(1, (now - created) / (target - created)));
 
+  const innerContent = (
+    <View style={[styles.innerContainer, countdown.backgroundImageUri ? styles.overlayPadding : null]}>
+      {/* Header row */}
+      <View style={styles.header}>
+        <View style={[styles.categoryBadge, { backgroundColor: accentColor + '22' }]}>
+          <Text style={[styles.categoryText, { color: accentColor }]}>
+            {CATEGORY_LABELS[countdown.category]}
+          </Text>
+        </View>
+        {countdown.notificationsEnabled && (
+          <Text style={styles.bellIcon}>🔔</Text>
+        )}
+      </View>
+
+      {/* Title */}
+      <Text style={styles.title} numberOfLines={2}>{countdown.title}</Text>
+
+      {/* Days prominent display */}
+      {remaining.days > 0 && (
+        <View style={styles.daysRow}>
+          <Text style={[styles.daysNumber, { color: accentColor }]}>{remaining.days}</Text>
+          <Text style={styles.daysLabel}>days left</Text>
+        </View>
+      )}
+
+      {/* HMS row */}
+      <View style={styles.timerRow}>
+        <TimeUnit value={remaining.hours}   label="HRS" />
+        <Text style={styles.separator}>:</Text>
+        <TimeUnit value={remaining.minutes} label="MIN" />
+        <Text style={styles.separator}>:</Text>
+        <TimeUnit value={remaining.seconds} label="SEC" />
+      </View>
+
+      {/* Progress bar */}
+      <View style={styles.progressTrack}>
+        <View
+          style={[
+            styles.progressFill,
+            { width: `${progress * 100}%` as any, backgroundColor: accentColor },
+          ]}
+        />
+      </View>
+
+      {/* Date label */}
+      <Text style={styles.dateText}>{dateLabel}</Text>
+    </View>
+  );
+
   return (
     <Animated.View entering={FadeInDown.delay(index * 80).springify()}>
       <Animated.View style={animatedStyle}>
         <TouchableOpacity
           activeOpacity={0.85}
           onLongPress={handleLongPress}
-          style={[styles.card, { borderLeftColor: accentColor }]}>
-          {/* Header row */}
-          <View style={styles.header}>
-            <View style={[styles.categoryBadge, { backgroundColor: accentColor + '22' }]}>
-              <Text style={[styles.categoryText, { color: accentColor }]}>
-                {CATEGORY_LABELS[countdown.category]}
-              </Text>
-            </View>
-            {countdown.notificationsEnabled && (
-              <Text style={styles.bellIcon}>🔔</Text>
-            )}
-          </View>
-
-          {/* Title */}
-          <Text style={styles.title} numberOfLines={2}>{countdown.title}</Text>
-
-          {/* Days prominent display */}
-          {remaining.days > 0 && (
-            <View style={styles.daysRow}>
-              <Text style={[styles.daysNumber, { color: accentColor }]}>{remaining.days}</Text>
-              <Text style={styles.daysLabel}>days left</Text>
-            </View>
+          style={[
+            styles.card, 
+            { borderLeftColor: accentColor },
+            countdown.backgroundImageUri ? { padding: 0, overflow: 'hidden' } : null
+          ]}>
+          
+          {countdown.backgroundImageUri ? (
+            <ImageBackground source={{ uri: countdown.backgroundImageUri }} style={styles.imageBg}>
+              <View style={styles.imageOverlay}>
+                {innerContent}
+              </View>
+            </ImageBackground>
+          ) : (
+            innerContent
           )}
-
-          {/* HMS row */}
-          <View style={styles.timerRow}>
-            <TimeUnit value={remaining.hours}   label="HRS" />
-            <Text style={styles.separator}>:</Text>
-            <TimeUnit value={remaining.minutes} label="MIN" />
-            <Text style={styles.separator}>:</Text>
-            <TimeUnit value={remaining.seconds} label="SEC" />
-          </View>
-
-          {/* Progress bar */}
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${progress * 100}%` as any, backgroundColor: accentColor },
-              ]}
-            />
-          </View>
-
-          {/* Date label */}
-          <Text style={styles.dateText}>{dateLabel}</Text>
+          
         </TouchableOpacity>
       </Animated.View>
     </Animated.View>
@@ -164,6 +212,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+  },
+  innerContainer: {
+    padding: 0,
+  },
+  overlayPadding: {
+    padding: Spacing.md,
+  },
+  imageBg: {
+    width: '100%',
+  },
+  imageOverlay: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   header: {
     flexDirection: 'row',

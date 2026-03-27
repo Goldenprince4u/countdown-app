@@ -1,0 +1,15 @@
+countdown-app@1.0.0 C:\Users\quadr\Desktop\Countdown app\countdown-app
+├─┬ @react-navigation/bottom-tabs@7.2.0
+│ └── @react-navigation/native@7.0.14 deduped
+├─┬ @react-navigation/elements@2.9.12
+│ └── @react-navigation/native@7.0.14 deduped invalid: "^7.2.0" from node_modules/@react-navigation/elements
+├─┬ @react-navigation/native@7.0.14 invalid: "^7.2.0" from node_modules/@react-navigation/elements
+│ └── @react-navigation/core@7.17.0
+└─┬ expo-router@6.0.23
+  ├─┬ @react-navigation/bottom-tabs@7.15.7
+  │ └── @react-navigation/native@7.2.0 deduped
+  ├─┬ @react-navigation/native-stack@7.14.7
+  │ └── @react-navigation/native@7.0.14 deduped invalid: "^7.2.0" from node_modules/@react-navigation/elements, "^7.2.0" from node_modules/@react-navigation/native-stack
+  └─┬ @react-navigation/native@7.2.0
+    └── @react-navigation/core@7.17.0 deduped
+

@@ -34,6 +34,8 @@ export interface Countdown {
   completionNotificationId?: string;
   createdAt: string; // ISO string
   archivedAt?: string; // ISO string – set when the timer completes
+  backgroundImageUri?: string; // Local URI for custom photo background
+  repeatInterval?: 'yearly' | 'monthly' | 'weekly';
 }
 
 export interface TimeRemaining {
