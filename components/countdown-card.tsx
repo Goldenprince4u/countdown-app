@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,8 @@ import Animated, {
 
 import type { Countdown } from '@/types/countdown';
 import { CATEGORY_COLORS, CATEGORY_LABELS, getTimeRemaining } from '@/types/countdown';
-import { AppColors, Radius, Spacing } from '@/constants/theme';
+import { useThemeContext } from '@/context/theme-context';
+import { DarkAppColors, LightAppColors, Radius, Spacing } from '@/constants/theme';
 import { useTickerContext } from '@/context/ticker-context';
 import { useAlarm } from '@/hooks/use-alarm';
 
@@ -32,7 +33,7 @@ interface Props {
   onEdit: (id: string) => void;
 }
 
-function TimeUnit({ value, label }: { value: number; label: string }) {
+function TimeUnit({ value, label, styles }: { value: number; label: string; styles: any }) {
   return (
     <View style={styles.timeUnit}>
       <Text style={styles.timeValue}>{String(value).padStart(2, '0')}</Text>
@@ -46,6 +47,10 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
   const remaining = getTimeRemaining(countdown.targetDate, now);
   const scale = useSharedValue(1);
   const { playAlarm, stopAlarm } = useAlarm();
+  
+  const { effectiveTheme } = useThemeContext();
+  const colors = effectiveTheme === 'dark' ? DarkAppColors : LightAppColors;
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   useEffect(() => {
     if (remaining.isExpired && !countdown.archivedAt) {
@@ -116,10 +121,11 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
   // Progress 0→1 from creation to targetDate
   const created  = new Date(countdown.createdAt).getTime();
   const target   = new Date(countdown.targetDate).getTime();
-  const progress = Math.max(0, Math.min(1, (now - created) / (target - created)));
+  // If it's a past event (count-up), just fill the progress bar completely.
+  const progress = remaining.isPast ? 1 : Math.max(0, Math.min(1, (now - created) / (target - created)));
 
-  // Urgent styling when ≤ 1 day remaining
-  const isUrgent = remaining.days === 0 && !remaining.isExpired;
+  // Urgent styling when ≤ 1 day remaining (only for future events)
+  const isUrgent = remaining.days === 0 && !remaining.isPast;
 
   const innerContent = (
     <View style={[styles.innerContainer, countdown.backgroundImageUri ? styles.overlayPadding : null]}>
@@ -148,17 +154,17 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
       {remaining.days > 0 && (
         <View style={styles.daysRow}>
           <Text style={[styles.daysNumber, { color: accentColor }]}>{remaining.days}</Text>
-          <Text style={styles.daysLabel}>days left</Text>
+          <Text style={styles.daysLabel}>{remaining.isPast ? 'days since' : 'days left'}</Text>
         </View>
       )}
 
       {/* HMS row */}
       <View style={styles.timerRow}>
-        <TimeUnit value={remaining.hours}   label="HRS" />
+        <TimeUnit value={remaining.hours}   label="HRS" styles={styles} />
         <Text style={styles.separator}>:</Text>
-        <TimeUnit value={remaining.minutes} label="MIN" />
+        <TimeUnit value={remaining.minutes} label="MIN" styles={styles} />
         <Text style={styles.separator}>:</Text>
-        <TimeUnit value={remaining.seconds} label="SEC" />
+        <TimeUnit value={remaining.seconds} label="SEC" styles={styles} />
       </View>
 
       {/* Progress bar */}
@@ -204,9 +210,9 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
   card: {
-    backgroundColor: AppColors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Spacing.md,
     marginBottom: Spacing.md,
@@ -247,7 +253,7 @@ const styles = StyleSheet.create({
   },
   repeatBadge: {
     fontSize: 11,
-    color: AppColors.textMuted,
+    color: colors.textMuted,
   },
   categoryBadge: {
     paddingHorizontal: Spacing.sm,
@@ -262,7 +268,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   title: {
-    color: AppColors.text,
+    color: colors.text,
     fontSize: 20,
     fontWeight: '700',
     marginBottom: Spacing.sm,
@@ -280,7 +286,7 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
   },
   daysLabel: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 16,
     marginLeft: Spacing.sm,
     fontWeight: '500',
@@ -295,19 +301,19 @@ const styles = StyleSheet.create({
     minWidth: 52,
   },
   timeValue: {
-    color: AppColors.text,
+    color: colors.text,
     fontSize: 28,
     fontWeight: '700',
     letterSpacing: 1,
   },
   timeLabel: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '600',
     marginTop: 2,
   },
   separator: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 24,
     fontWeight: '300',
     marginHorizontal: 4,
@@ -315,7 +321,7 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 3,
-    backgroundColor: AppColors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.full,
     marginBottom: Spacing.sm,
     overflow: 'hidden',
@@ -326,7 +332,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   dateText: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '500',
   },

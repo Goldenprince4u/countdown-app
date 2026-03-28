@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,8 +14,9 @@ import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { useCountdownContext } from '@/context/countdown-context';
+import { useThemeContext } from '@/context/theme-context';
 import { CountdownCard } from '@/components/countdown-card';
-import { AppColors, Spacing, Radius } from '@/constants/theme';
+import { DarkAppColors, LightAppColors, Spacing, Radius } from '@/constants/theme';
 import { CATEGORIES, type CountdownCategory } from '@/types/countdown';
 
 export default function TimersScreen() {
@@ -27,6 +28,11 @@ export default function TimersScreen() {
     renewCountdown,
     addCountdown,
   } = useCountdownContext();
+  
+  const { effectiveTheme, themeMode, setThemeMode } = useThemeContext();
+  const colors = effectiveTheme === 'dark' ? DarkAppColors : LightAppColors;
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -75,6 +81,12 @@ export default function TimersScreen() {
     [router]
   );
 
+  const toggleTheme = () => {
+    if (themeMode === 'system') setThemeMode('dark');
+    else if (themeMode === 'dark') setThemeMode('light');
+    else setThemeMode('system');
+  };
+
   const filteredCountdowns = activeCountdowns.filter(c => {
     const matchesSearch = c.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = filterCategory ? c.category === filterCategory : true;
@@ -97,6 +109,11 @@ export default function TimersScreen() {
               : 'No active timers'}
           </Text>
         </View>
+        <TouchableOpacity onPress={toggleTheme} style={styles.themeToggle}>
+          <Text style={styles.themeToggleIcon}>
+            {themeMode === 'system' ? '⚙️' : themeMode === 'light' ? '☀️' : '🌙'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* ── Search Bar ── */}
@@ -105,7 +122,7 @@ export default function TimersScreen() {
           <TextInput
             style={styles.searchInput}
             placeholder="Search countdowns…"
-            placeholderTextColor={AppColors.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             returnKeyType="search"
@@ -121,9 +138,9 @@ export default function TimersScreen() {
             onPress={() => setFilterCategory(null)}
             style={[
               styles.filterChip,
-              !filterCategory && { backgroundColor: AppColors.accent + '33', borderColor: AppColors.accent },
+              !filterCategory && { backgroundColor: colors.accent + '33', borderColor: colors.accent },
             ]}>
-            <Text style={[styles.filterChipText, !filterCategory && { color: AppColors.accent }]}>
+            <Text style={[styles.filterChipText, !filterCategory && { color: colors.accent }]}>
               All
             </Text>
           </TouchableOpacity>
@@ -134,14 +151,14 @@ export default function TimersScreen() {
               style={[
                 styles.filterChip,
                 filterCategory === cat && {
-                  backgroundColor: AppColors.accent + '33',
-                  borderColor: AppColors.accent,
+                  backgroundColor: colors.accent + '33',
+                  borderColor: colors.accent,
                 },
               ]}>
               <Text
                 style={[
                   styles.filterChipText,
-                  filterCategory === cat && { color: AppColors.accent },
+                  filterCategory === cat && { color: colors.accent },
                 ]}>
                 {cat.charAt(0).toUpperCase() + cat.slice(1)}
               </Text>
@@ -194,40 +211,55 @@ export default function TimersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: AppColors.bg,
+    backgroundColor: colors.bg,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.sm,
   },
   headerTitle: {
-    color: AppColors.text,
+    color: colors.text,
     fontSize: 32,
     fontWeight: '800',
     letterSpacing: -0.5,
   },
   headerSub: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 14,
     marginTop: 2,
+  },
+  themeToggle: {
+    padding: Spacing.xs,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: Radius.full,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  themeToggleIcon: {
+    fontSize: 18,
   },
   searchRow: {
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.sm,
   },
   searchInput: {
-    backgroundColor: AppColors.surface,
-    color: AppColors.text,
+    backgroundColor: colors.surface,
+    color: colors.text,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: 10,
     fontSize: 15,
     borderWidth: 1,
-    borderColor: AppColors.border,
+    borderColor: colors.border,
   },
   filterRow: {
     flexDirection: 'row',
@@ -238,13 +270,13 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     borderWidth: 1,
-    borderColor: AppColors.border,
+    borderColor: colors.border,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 5,
   },
   filterChipText: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -266,14 +298,14 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   emptyTitle: {
-    color: AppColors.text,
+    color: colors.text,
     fontSize: 22,
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: Spacing.sm,
   },
   emptySub: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
@@ -285,10 +317,10 @@ const styles = StyleSheet.create({
     width: 62,
     height: 62,
     borderRadius: Radius.full,
-    backgroundColor: AppColors.accent,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: AppColors.accent,
+    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5,
     shadowRadius: 12,

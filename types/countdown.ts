@@ -39,6 +39,8 @@ export interface Countdown {
   notes?: string;
   /** How long (in seconds) to ring the alarm when the countdown hits zero. Default 15. */
   alarmDuration?: number;
+  /** ISO string tracking when notifications were last scheduled, for background top-ups (iOS limits) */
+  lastRescheduledAt?: string;
 }
 
 
@@ -49,19 +51,21 @@ export interface TimeRemaining {
   minutes: number;
   seconds: number;
   isExpired: boolean;
+  isPast: boolean;
 }
 
 export function getTimeRemaining(targetDate: string, now: number = Date.now()): TimeRemaining {
-  const total = new Date(targetDate).getTime() - now;
-  if (total <= 0) {
-    return { total: 0, days: 0, hours: 0, minutes: 0, seconds: 0, isExpired: true };
-  }
+  const target = new Date(targetDate).getTime();
+  const isPast = now >= target;
+  const difference = isPast ? now - target : target - now;
+
   return {
-    total,
-    isExpired: false,
-    days:    Math.floor(total / (1000 * 60 * 60 * 24)),
-    hours:   Math.floor((total % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-    minutes: Math.floor((total % (1000 * 60 * 60)) / (1000 * 60)),
-    seconds: Math.floor((total % (1000 * 60)) / 1000),
+    total: difference,
+    isExpired: isPast,
+    isPast,
+    days:    Math.floor(difference / (1000 * 60 * 60 * 24)),
+    hours:   Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+    minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
+    seconds: Math.floor((difference % (1000 * 60)) / 1000),
   };
 }

@@ -78,9 +78,9 @@ async function scheduleDailyCountdownNotifications(
   const ids: string[] = [];
   const targetDate = new Date(countdown.targetDate);
 
-  // Cap at 490 so we never hit Android's 500-notification hard limit.
+  // Cap at 30 on iOS (OS limit is 64 total per app), 490 on Android (OS limit is 500).
   // The last day (day-0) is always handled by the separate completion notification.
-  const maxNotifications = Math.min(daysUntilTarget - 1, 490);
+  const maxNotifications = Math.min(daysUntilTarget - 1, Platform.OS === 'ios' ? 30 : 490);
 
   for (let i = 1; i <= maxNotifications; i++) {
     const fireDate = new Date();

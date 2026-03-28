@@ -29,7 +29,7 @@ export const Colors = {
 };
 
 // ─── App-wide dark UI palette ─────────────────────────────────────────────────
-export const AppColors = {
+export const DarkAppColors = {
   bg:          '#0D0D1A',
   surface:     '#16162A',
   surfaceAlt:  '#1E1E38',
@@ -39,6 +39,20 @@ export const AppColors = {
   accent:      '#6C63FF',
   accentLight: '#A89BFF',
 };
+
+export const LightAppColors = {
+  bg:          '#F4F4F9',
+  surface:     '#FFFFFF',
+  surfaceAlt:  '#EAEAF2',
+  border:      'rgba(0,0,0,0.08)',
+  text:        '#11181C',
+  textMuted:   '#687076',
+  accent:      '#6C63FF',
+  accentLight: '#A89BFF',
+};
+
+// Alias for backwards compatibility during refactor
+export const AppColors = DarkAppColors;
 
 // ─── Category card colours ────────────────────────────────────────────────────
 export const CategoryColors = {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,22 +19,26 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { useCountdownContext } from '@/context/countdown-context';
+import { useThemeContext } from '@/context/theme-context';
 import {
   CATEGORIES,
   CATEGORY_COLORS,
   CATEGORY_LABELS,
   type CountdownCategory,
 } from '@/types/countdown';
-import { AppColors, Spacing, Radius } from '@/constants/theme';
+import { DarkAppColors, LightAppColors, Spacing, Radius } from '@/constants/theme';
 
-// Minimum buffer in ms — date must be at least 60 seconds in the future
-const MIN_DATE_BUFFER_MS = 60 * 1000;
+// We no longer require a minimum date buffer because we now support Count-Up milestone tracking for past dates.
 
 export default function AddCountdownModal() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { addCountdown, updateCountdown, countdowns } = useCountdownContext();
   const insets = useSafeAreaInsets();
+  
+  const { effectiveTheme } = useThemeContext();
+  const colors = effectiveTheme === 'dark' ? DarkAppColors : LightAppColors;
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const isEditing = !!id;
   const existing = isEditing ? countdowns.find(c => c.id === id) : undefined;
@@ -74,7 +78,6 @@ export default function AddCountdownModal() {
   };
 
   const onDateChange = (event: DateTimePickerEvent, selected?: Date) => {
-    // Only dismiss if not iOS (iOS inline picker shouldn't be hidden)
     if (Platform.OS !== 'ios') {
       setShowDatePicker(false);
     }
@@ -102,12 +105,7 @@ export default function AddCountdownModal() {
       return;
     }
 
-    // Use a 60-second buffer so dates that are valid now but would be
-    // immediately rejected by the notification scheduler are caught here.
-    if (targetDate.getTime() - Date.now() < MIN_DATE_BUFFER_MS) {
-      Alert.alert('Invalid date', 'Please pick a date at least 1 minute in the future.');
-      return;
-    }
+    // Removed MIN_DATE_BUFFER_MS check to allow selecting dates in the past (Count-Up milestones).
 
     setSaving(true);
     try {
@@ -166,7 +164,7 @@ export default function AddCountdownModal() {
           id="countdown-title-input"
           style={styles.input}
           placeholder="e.g. Summer Holiday"
-          placeholderTextColor={AppColors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={title}
           onChangeText={setTitle}
           maxLength={60}
@@ -178,7 +176,7 @@ export default function AddCountdownModal() {
         <TextInput
           style={[styles.input, styles.notesInput]}
           placeholder="e.g. Flight number BA123, hotel address…"
-          placeholderTextColor={AppColors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={notes}
           onChangeText={setNotes}
           maxLength={200}
@@ -198,7 +196,7 @@ export default function AddCountdownModal() {
         </View>
         <TouchableOpacity style={styles.pickerBtn} onPress={pickImage}>
           <Text style={styles.pickerIcon}>🖼️</Text>
-          <Text style={[styles.pickerText, backgroundImageUri && { color: AppColors.accent }]}>
+          <Text style={[styles.pickerText, backgroundImageUri && { color: colors.accent }]}>
             {backgroundImageUri ? 'Photo Selected (Tap to change)' : 'Select Photo from Gallery'}
           </Text>
         </TouchableOpacity>
@@ -235,7 +233,7 @@ export default function AddCountdownModal() {
                   mode="date"
                   display="inline"
                   onChange={onDateChange}
-                  themeVariant="dark"
+                  themeVariant={effectiveTheme}
                 />
               </View>
             </View>
@@ -247,7 +245,7 @@ export default function AddCountdownModal() {
               mode="date"
               display="default"
               onChange={onDateChange}
-              themeVariant="dark"
+              themeVariant={effectiveTheme}
             />
           )
         )}
@@ -276,7 +274,7 @@ export default function AddCountdownModal() {
                   mode="time"
                   display="spinner"
                   onChange={onTimeChange}
-                  themeVariant="dark"
+                  themeVariant={effectiveTheme}
                 />
               </View>
             </View>
@@ -288,7 +286,7 @@ export default function AddCountdownModal() {
               mode="time"
               display="default"
               onChange={onTimeChange}
-              themeVariant="dark"
+              themeVariant={effectiveTheme}
             />
           )
         )}
@@ -309,7 +307,7 @@ export default function AddCountdownModal() {
                   { borderColor: color },
                   selected && { backgroundColor: color + '33' },
                 ]}>
-                <Text style={[styles.categoryChipText, { color: selected ? color : AppColors.textMuted }]}>
+                <Text style={[styles.categoryChipText, { color: selected ? color : colors.textMuted }]}>
                   {CATEGORY_LABELS[cat]}
                 </Text>
               </TouchableOpacity>
@@ -329,10 +327,10 @@ export default function AddCountdownModal() {
                 onPress={() => setRepeatInterval(interval as any)}
                 style={[
                   styles.categoryChip,
-                  { borderColor: isSelected ? AppColors.accent : AppColors.border },
-                  isSelected && { backgroundColor: AppColors.accent + '33' },
+                  { borderColor: isSelected ? colors.accent : colors.border },
+                  isSelected && { backgroundColor: colors.accent + '33' },
                 ]}>
-                <Text style={[styles.categoryChipText, { color: isSelected ? AppColors.accent : AppColors.textMuted }]}>
+                <Text style={[styles.categoryChipText, { color: isSelected ? colors.accent : colors.textMuted }]}>
                   {label}
                 </Text>
               </TouchableOpacity>
@@ -352,10 +350,10 @@ export default function AddCountdownModal() {
                 onPress={() => setAlarmDuration(secs)}
                 style={[
                   styles.categoryChip,
-                  { borderColor: isSelected ? AppColors.accent : AppColors.border },
-                  isSelected && { backgroundColor: AppColors.accent + '33' },
+                  { borderColor: isSelected ? colors.accent : colors.border },
+                  isSelected && { backgroundColor: colors.accent + '33' },
                 ]}>
-                <Text style={[styles.categoryChipText, { color: isSelected ? AppColors.accent : AppColors.textMuted }]}>
+                <Text style={[styles.categoryChipText, { color: isSelected ? colors.accent : colors.textMuted }]}>
                   {label}
                 </Text>
               </TouchableOpacity>
@@ -372,7 +370,7 @@ export default function AddCountdownModal() {
           <Switch
             value={notifications}
             onValueChange={setNotifications}
-            trackColor={{ false: AppColors.surfaceAlt, true: AppColors.accent }}
+            trackColor={{ false: colors.surfaceAlt, true: colors.accent }}
             thumbColor="#fff"
           />
         </View>
@@ -381,10 +379,10 @@ export default function AddCountdownModal() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: AppColors.bg,
+    backgroundColor: colors.bg,
   },
   topBar: {
     flexDirection: 'row',
@@ -393,19 +391,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: AppColors.border,
+    borderBottomColor: colors.border,
   },
   topBarCancel: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 16,
   },
   topBarTitle: {
-    color: AppColors.text,
+    color: colors.text,
     fontSize: 17,
     fontWeight: '700',
   },
   saveBtn: {
-    backgroundColor: AppColors.accent,
+    backgroundColor: colors.accent,
     paddingHorizontal: Spacing.md,
     paddingVertical: 7,
     borderRadius: Radius.full,
@@ -429,7 +427,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
   },
   label: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1,
@@ -438,19 +436,19 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   removeText: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 13,
     marginBottom: 6,
   },
   input: {
-    backgroundColor: AppColors.surface,
-    color: AppColors.text,
+    backgroundColor: colors.surface,
+    color: colors.text,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     fontSize: 17,
     borderWidth: 1,
-    borderColor: AppColors.border,
+    borderColor: colors.border,
   },
   notesInput: {
     minHeight: 80,
@@ -464,21 +462,21 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   pickerBtn: {
-    backgroundColor: AppColors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: AppColors.border,
+    borderColor: colors.border,
   },
   pickerIcon: {
     fontSize: 18,
     marginRight: Spacing.sm,
   },
   pickerText: {
-    color: AppColors.text,
+    color: colors.text,
     fontSize: 16,
   },
   categoryGrid: {
@@ -500,21 +498,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: AppColors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.md,
     padding: Spacing.md,
     marginTop: Spacing.md,
     borderWidth: 1,
-    borderColor: AppColors.border,
+    borderColor: colors.border,
   },
   switchLabel: {
-    color: AppColors.text,
+    color: colors.text,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 3,
   },
   switchSub: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 12,
   },
   modalOverlay: {
@@ -523,7 +521,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   pickerContainer: {
-    backgroundColor: AppColors.surface,
+    backgroundColor: colors.surface,
     paddingBottom: 20,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
@@ -533,10 +531,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     padding: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: AppColors.border,
+    borderBottomColor: colors.border,
   },
   pickerDoneBtn: {
-    color: AppColors.accent,
+    color: colors.accent,
     fontSize: 16,
     fontWeight: 'bold',
   },

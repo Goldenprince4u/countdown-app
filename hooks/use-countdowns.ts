@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Countdown } from '@/types/countdown';
 import {
@@ -7,6 +8,9 @@ import {
 } from '@/hooks/use-notifications';
 
 export const STORAGE_KEY = '@countdowns_v1';
+
+// 14 days in ms. If notifications were last scheduled more than 14 days ago, top them up.
+const TOP_UP_THRESHOLD_MS = 14 * 24 * 60 * 60 * 1000;
 
 export function useCountdowns() {
   const [countdowns, setCountdowns] = useState<Countdown[]>([]);
@@ -19,23 +23,66 @@ export function useCountdowns() {
     setCountdowns(updated);
   }, []);
 
+  const checkAndTopUpNotifications = useCallback(async (current: Countdown[]) => {
+    let changed = false;
+    const nowMs = Date.now();
+    let updated = [...current];
+
+    for (const c of current) {
+      if (c.archivedAt || !c.notificationsEnabled) continue;
+
+      const lastResched = c.lastRescheduledAt ? new Date(c.lastRescheduledAt).getTime() : 0;
+      if (nowMs - lastResched > TOP_UP_THRESHOLD_MS) {
+        await cancelCountdownNotifications(c);
+        const { dailyNotificationIds, completionNotificationId } = await scheduleCountdownNotifications(c);
+
+        updated = updated.map(item =>
+          item.id === c.id
+            ? {
+                ...item,
+                dailyNotificationIds,
+                completionNotificationId,
+                lastRescheduledAt: new Date().toISOString(),
+              }
+            : item
+        );
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      syncState(updated);
+    }
+  }, [syncState]);
+
   const loadCountdowns = useCallback(async () => {
     try {
       const json = await AsyncStorage.getItem(STORAGE_KEY);
       if (json) {
         const parsed: Countdown[] = JSON.parse(json);
         syncState(parsed);
+        // Non-blocking background top-up if it's been a while
+        checkAndTopUpNotifications(parsed).catch(console.error);
       }
     } catch (e) {
       console.error('Failed to load countdowns', e);
     } finally {
       setLoading(false);
     }
-  }, [syncState]);
+  }, [syncState, checkAndTopUpNotifications]);
 
   useEffect(() => {
     loadCountdowns();
-  }, [loadCountdowns]);
+
+    // Re-check top-ups when app comes to foreground
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        checkAndTopUpNotifications(countdownsRef.current).catch(console.error);
+      }
+    });
+    return () => subscription.remove();
+  }, [loadCountdowns, checkAndTopUpNotifications]);
 
   const persist = useCallback(async (updated: Countdown[]) => {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
@@ -57,6 +104,7 @@ export function useCountdowns() {
         ...placeholder,
         dailyNotificationIds,
         completionNotificationId,
+        lastRescheduledAt: new Date().toISOString(),
       };
 
       const updated = [...countdownsRef.current, newCountdown];
@@ -88,7 +136,12 @@ export function useCountdowns() {
           await scheduleCountdownNotifications(merged);
 
         const final = countdownsRef.current.map(c =>
-          c.id === id ? { ...c, dailyNotificationIds, completionNotificationId } : c
+          c.id === id ? { 
+            ...c, 
+            dailyNotificationIds, 
+            completionNotificationId,
+            lastRescheduledAt: new Date().toISOString() 
+          } : c
         );
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(final));
         syncState(final);
@@ -168,7 +221,12 @@ export function useCountdowns() {
         await scheduleCountdownNotifications(merged);
 
       const final = countdownsRef.current.map(c =>
-        c.id === id ? { ...c, dailyNotificationIds, completionNotificationId } : c
+        c.id === id ? { 
+          ...c, 
+          dailyNotificationIds, 
+          completionNotificationId,
+          lastRescheduledAt: new Date().toISOString()
+        } : c
       );
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(final));
       syncState(final);

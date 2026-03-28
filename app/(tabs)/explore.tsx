@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCountdownContext } from '@/context/countdown-context';
+import { useThemeContext } from '@/context/theme-context';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from '@/types/countdown';
-import { AppColors, Spacing, Radius } from '@/constants/theme';
+import { DarkAppColors, LightAppColors, Spacing, Radius } from '@/constants/theme';
 
 type SortOption = 'newest' | 'oldest' | 'alpha';
 
@@ -25,6 +26,10 @@ export default function ArchiveScreen() {
   const { archivedCountdowns, deleteCountdown, updateCountdown } = useCountdownContext();
   const insets = useSafeAreaInsets();
   const [sortBy, setSortBy] = useState<SortOption>('newest');
+
+  const { effectiveTheme } = useThemeContext();
+  const colors = effectiveTheme === 'dark' ? DarkAppColors : LightAppColors;
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleLongPress = (id: string, title: string) => {
     Alert.alert(title, 'What would you like to do?', [
@@ -77,12 +82,12 @@ export default function ArchiveScreen() {
               onPress={() => setSortBy(opt)}
               style={[
                 styles.sortChip,
-                sortBy === opt && { backgroundColor: AppColors.accent + '33', borderColor: AppColors.accent },
+                sortBy === opt && { backgroundColor: colors.accent + '33', borderColor: colors.accent },
               ]}>
               <Text
                 style={[
                   styles.sortChipText,
-                  sortBy === opt && { color: AppColors.accent },
+                  sortBy === opt && { color: colors.accent },
                 ]}>
                 {SORT_LABELS[opt]}
               </Text>
@@ -163,10 +168,10 @@ export default function ArchiveScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: AppColors.bg,
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: Spacing.lg,
@@ -174,13 +179,13 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.sm,
   },
   headerTitle: {
-    color: AppColors.text,
+    color: colors.text,
     fontSize: 32,
     fontWeight: '800',
     letterSpacing: -0.5,
   },
   headerSub: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 14,
     marginTop: 2,
   },
@@ -192,13 +197,13 @@ const styles = StyleSheet.create({
   },
   sortChip: {
     borderWidth: 1,
-    borderColor: AppColors.border,
+    borderColor: colors.border,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 5,
   },
   sortChipText: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -220,20 +225,20 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   emptyTitle: {
-    color: AppColors.text,
+    color: colors.text,
     fontSize: 22,
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: Spacing.sm,
   },
   emptySub: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
   },
   card: {
-    backgroundColor: AppColors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Spacing.md,
     marginBottom: Spacing.md,
@@ -246,7 +251,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   longPressHint: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 10,
     marginTop: Spacing.sm,
     fontStyle: 'italic',
@@ -271,25 +276,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   title: {
-    color: AppColors.text,
+    color: colors.text,
     fontSize: 18,
     fontWeight: '700',
     marginBottom: Spacing.sm,
   },
   notesText: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 13,
     fontStyle: 'italic',
     marginBottom: Spacing.xs,
     lineHeight: 18,
   },
   dateText: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 13,
     marginBottom: 4,
   },
   completedText: {
-    color: AppColors.textMuted,
+    color: colors.textMuted,
     fontSize: 12,
     fontStyle: 'italic',
   },
