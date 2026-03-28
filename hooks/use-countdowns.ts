@@ -158,7 +158,7 @@ export function useCountdowns() {
         
         // Delete the saved background image if it exists to prevent storage bloat
         if (countdown.backgroundImageUri) {
-          import('expo-file-system').then(FileSystem => {
+          import('expo-file-system/legacy').then(FileSystem => {
             FileSystem.deleteAsync(countdown.backgroundImageUri as string, { idempotent: true }).catch(console.warn);
           }).catch(console.warn);
         }
