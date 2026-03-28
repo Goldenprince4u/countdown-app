@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 
 import { useCountdownContext } from '@/context/countdown-context';
 import { useThemeContext } from '@/context/theme-context';
@@ -58,6 +58,7 @@ export default function AddCountdownModal() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [saving, setSaving]           = useState(false);
   const [backgroundImageUri, setBackgroundImageUri] = useState<string | undefined>(existing?.backgroundImageUri);
+  const [tempImageUri, setTempImageUri] = useState<string | undefined>(undefined);
   const [repeatInterval, setRepeatInterval] = useState<'yearly' | 'monthly' | 'weekly' | undefined>(existing?.repeatInterval);
   const [alarmDuration, setAlarmDuration] = useState<number>(existing?.alarmDuration ?? 15);
 
@@ -70,10 +71,8 @@ export default function AddCountdownModal() {
 
     if (!result.canceled) {
       const uri = result.assets[0].uri;
-      const filename = uri.split('/').pop() || 'photo.jpg';
-      const newUri = FileSystem.documentDirectory + filename;
-      await FileSystem.copyAsync({ from: uri, to: newUri });
-      setBackgroundImageUri(newUri);
+      setTempImageUri(uri);
+      setBackgroundImageUri(uri);
     }
   };
 
@@ -105,16 +104,30 @@ export default function AddCountdownModal() {
       return;
     }
 
-    // Removed MIN_DATE_BUFFER_MS check to allow selecting dates in the past (Count-Up milestones).
-
     setSaving(true);
     try {
+      let finalImageUri = backgroundImageUri;
+
+      // Copy to permanent storage only on save
+      if (tempImageUri && backgroundImageUri === tempImageUri) {
+        if (FileSystem.documentDirectory) {
+           const filename = Date.now() + '-' + (tempImageUri.split('/').pop() || 'photo.jpg');
+           finalImageUri = FileSystem.documentDirectory + filename;
+           await FileSystem.copyAsync({ from: tempImageUri, to: finalImageUri });
+        }
+      }
+
+      // Cleanup old permanent image if it was replaced or removed
+      if (isEditing && existing?.backgroundImageUri && existing.backgroundImageUri !== finalImageUri) {
+        FileSystem.deleteAsync(existing.backgroundImageUri, { idempotent: true }).catch(console.warn);
+      }
+
       const payload = {
         title: title.trim(),
         targetDate: targetDate.toISOString(),
         category,
         notificationsEnabled: notifications,
-        backgroundImageUri,
+        backgroundImageUri: finalImageUri,
         repeatInterval,
         notes: notes.trim() || undefined,
         alarmDuration,

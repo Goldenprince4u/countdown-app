@@ -155,6 +155,13 @@ export function useCountdowns() {
       const countdown = countdownsRef.current.find(c => c.id === id);
       if (countdown) {
         await cancelCountdownNotifications(countdown);
+        
+        // Delete the saved background image if it exists to prevent storage bloat
+        if (countdown.backgroundImageUri) {
+          import('expo-file-system').then(FileSystem => {
+            FileSystem.deleteAsync(countdown.backgroundImageUri as string, { idempotent: true }).catch(console.warn);
+          }).catch(console.warn);
+        }
       }
       const updated = countdownsRef.current.filter(c => c.id !== id);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
