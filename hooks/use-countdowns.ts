@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
 import type { Countdown } from '@/types/countdown';
 import {
   scheduleCountdownNotifications,
@@ -158,9 +159,7 @@ export function useCountdowns() {
         
         // Delete the saved background image if it exists to prevent storage bloat
         if (countdown.backgroundImageUri) {
-          import('expo-file-system/legacy').then(FileSystem => {
-            FileSystem.deleteAsync(countdown.backgroundImageUri as string, { idempotent: true }).catch(console.warn);
-          }).catch(console.warn);
+          FileSystem.deleteAsync(countdown.backgroundImageUri as string, { idempotent: true }).catch(console.warn);
         }
       }
       const updated = countdownsRef.current.filter(c => c.id !== id);
