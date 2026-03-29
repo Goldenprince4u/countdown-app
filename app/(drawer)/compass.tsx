@@ -1,52 +1,73 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { StyleSheet, Text, View, Dimensions } from 'react-native';
 import { Magnetometer, MagnetometerMeasurement } from 'expo-sensors';
-import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { useThemeContext } from '@/context/theme-context';
 import { DarkAppColors, LightAppColors, Spacing, Radius } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
 
-// LPF for smoothing out the magnetometer data
-const LPF = 0.05;
-
 export default function CompassScreen() {
   const { effectiveTheme } = useThemeContext();
   const colors = effectiveTheme === 'dark' ? DarkAppColors : LightAppColors;
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const [heading, setHeading] = useState(0);
+  const [headingText, setHeadingText] = useState(0);
+  
+  // We use a Reanimated SharedValue to drive the needle natively on the UI thread.
+  // This drastically increases performance and removes React state bottleneck jitter.
+  const rotation = useSharedValue(0);
 
   useEffect(() => {
+    // 50ms interval offers a great compromise between battery life and fluidity
     Magnetometer.setUpdateInterval(50);
     
-    let previousHeading = 0;
+    let previousRawHeading = 0;
     
-    // Using simple low-pass filter to smooth jittery compass readings
     const subscription = Magnetometer.addListener((data: MagnetometerMeasurement) => {
       let { x, y } = data;
-      // Calculate heading
+      // Calculate true heading from Magnetometer vector
       let h = Math.atan2(y, x) * (180 / Math.PI);
-      h = h - 90; // Adjust for typical device orientation
+      h = h - 90; // Adjust for typical device orientation portrait layout
       if (h < 0) {
         h = 360 + h;
       }
       
-      const smoothed = previousHeading + LPF * (h - previousHeading);
-      previousHeading = smoothed;
+      // Calculate continuous difference to prevent a 360-degree snap spin
+      // e.g. rotating past North shouldn't make the needle whip backwards!
+      let diff = h - previousRawHeading;
+      if (diff > 180) {
+         diff -= 360;
+      } else if (diff < -180) {
+         diff += 360;
+      }
       
-      setHeading(Math.round(h));
+      // Hardware Deadzone: Ignore microscopic sensor noise (< 1 degree) 
+      // when the phone is perfectly balanced on a table.
+      if (Math.abs(diff) > 1) {
+         const newRotation = rotation.value + diff;
+         setHeadingText(Math.round(h));
+         
+         // Apply buttery smooth physics 
+         rotation.value = withSpring(newRotation, {
+           damping: 30,
+           stiffness: 150,
+           mass: 1,
+         });
+         
+         previousRawHeading = h;
+      }
     });
 
     return () => {
       subscription.remove();
     };
-  }, []);
+  }, [rotation]);
 
   const animatedStyles = useAnimatedStyle(() => {
     return {
-      transform: [{ rotate: `-${heading}deg` }]
+      transform: [{ rotate: `-${rotation.value}deg` }]
     };
   });
 
@@ -64,7 +85,7 @@ export default function CompassScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.headingText}>{heading}° {getDirection(heading)}</Text>
+      <Text style={styles.headingText}>{headingText}° {getDirection(headingText)}</Text>
       
       <View style={styles.compassContainer}>
         <Animated.View style={[styles.compass, animatedStyles]}>
