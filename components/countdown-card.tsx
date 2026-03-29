@@ -52,8 +52,16 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
   const colors = effectiveTheme === 'dark' ? DarkAppColors : LightAppColors;
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  const created  = new Date(countdown.createdAt).getTime();
+  const target   = new Date(countdown.targetDate).getTime();
+  
+  // A milestone is explicitly created in the past. It never "expires" or auto-archives.
+  const isMilestone = countdown.isMilestone ?? target <= created;
+
   useEffect(() => {
-    if (remaining.isExpired && !countdown.archivedAt) {
+    // Only ring alarm and auto-archive if it's a naturally expiring countdown,
+    // and NOT a user-restored item or a past milestone!
+    if (remaining.isExpired && !countdown.archivedAt && !isMilestone && !countdown.isRestored) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       // Ring the alarm for the user-configured duration (default 15 s)
       playAlarm(countdown.alarmDuration ?? 15);
@@ -64,7 +72,7 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
       }
     }
   }, [remaining.isExpired, countdown.id, countdown.archivedAt, countdown.repeatInterval,
-      countdown.alarmDuration, onRenew, onArchive, playAlarm]);
+      countdown.alarmDuration, countdown.isRestored, isMilestone, onRenew, onArchive, playAlarm]);
 
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
@@ -119,8 +127,6 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
   });
 
   // Progress 0→1 from creation to targetDate
-  const created  = new Date(countdown.createdAt).getTime();
-  const target   = new Date(countdown.targetDate).getTime();
   // If it's a past event (count-up), just fill the progress bar completely.
   const progress = remaining.isPast ? 1 : Math.max(0, Math.min(1, (now - created) / (target - created)));
 

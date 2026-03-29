@@ -35,7 +35,7 @@ export default function ArchiveScreen() {
     Alert.alert(title, 'What would you like to do?', [
       {
         text: 'Restore',
-        onPress: () => updateCountdown(id, { archivedAt: undefined }),
+        onPress: () => updateCountdown(id, { archivedAt: undefined, isRestored: true }),
       },
       {
         text: 'Delete',

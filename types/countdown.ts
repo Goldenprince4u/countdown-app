@@ -41,6 +41,10 @@ export interface Countdown {
   alarmDuration?: number;
   /** ISO string tracking when notifications were last scheduled, for background top-ups (iOS limits) */
   lastRescheduledAt?: string;
+  /** Flags if the countdown was manually restored from the archive */
+  isRestored?: boolean;
+  /** Flags if the countdown was created as a milestone (target date in the past) */
+  isMilestone?: boolean;
 }
 
 
