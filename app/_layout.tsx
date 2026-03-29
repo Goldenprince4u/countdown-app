@@ -13,7 +13,7 @@ import { requestNotificationPermissions } from '@/hooks/use-notifications';
 import { DarkAppColors, LightAppColors } from '@/constants/theme';
 
 export const unstable_settings = {
-  initialRouteName: '(tabs)',
+  initialRouteName: '(drawer)',
 };
 
 function RootLayoutInner() {
@@ -30,7 +30,7 @@ function RootLayoutInner() {
   return (
     <ThemeProvider value={effectiveTheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
         <Stack.Screen
           name="modal"
           options={{ presentation: 'modal', title: 'New Countdown', headerShown: false }}

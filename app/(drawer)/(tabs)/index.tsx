@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
+import { DrawerActions } from '@react-navigation/native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { useCountdownContext } from '@/context/countdown-context';
@@ -34,6 +35,7 @@ export default function TimersScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -101,13 +103,21 @@ export default function TimersScreen() {
       ]}>
       {/* ── Header ── */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Countdowns</Text>
-          <Text style={styles.headerSub}>
-            {activeCountdowns.length > 0
-              ? `${activeCountdowns.length} active timer${activeCountdowns.length !== 1 ? 's' : ''}`
-              : 'No active timers'}
-          </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity 
+            onPress={() => navigation.dispatch(DrawerActions.openDrawer())} 
+            style={[styles.themeToggle, { marginRight: 12 }]}
+          >
+            <Text style={styles.themeToggleIcon}>☰</Text>
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>Countdowns</Text>
+            <Text style={styles.headerSub}>
+              {activeCountdowns.length > 0
+                ? `${activeCountdowns.length} active timer${activeCountdowns.length !== 1 ? 's' : ''}`
+                : 'No active timers'}
+            </Text>
+          </View>
         </View>
         <TouchableOpacity onPress={toggleTheme} style={styles.themeToggle}>
           <Text style={styles.themeToggleIcon}>

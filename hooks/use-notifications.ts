@@ -12,10 +12,10 @@ Notifications.setNotificationHandler({
 });
 
 /** Channel ID for the 70-day "X days to go" daily beep notifications */
-const DAILY_BEEP_CHANNEL = 'countdown-daily-beep';
+const DAILY_BEEP_CHANNEL = 'countdown-daily-beep-v2';
 
 /** Channel ID for milestone / general countdown reminders */
-const REMINDERS_CHANNEL = 'countdown-reminders';
+const REMINDERS_CHANNEL = 'countdown-reminders-v2';
 
 export async function requestNotificationPermissions(): Promise<boolean> {
   if (Platform.OS === 'android') {
