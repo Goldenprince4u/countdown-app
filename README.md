@@ -1,33 +1,32 @@
-# Countdown App ⏳
+# Countdown App ⏳ & Qiblah Compass 🧭
 
-A modern, highly-polished React Native application built with [Expo SDK 52](https://expo.dev) that lets you create, track, and manage all your important upcoming events—and even track milestones from the past!
+A modern, highly-polished React Native application built with [Expo SDK 52](https://expo.dev) that lets you create, track, and manage all your important upcoming events, alongside a meticulously calibrated hardware Qiblah Compass.
 
 ## ✨ Features
 
-- **Global Ticking Architecture**: Built with a centralized `TickerProvider` to update all active timers smoothly on the UI thread without destroying battery life.
-- **Count-Up Milestones**: Set a date in the past (e.g., "Days since I quit smoking") to track your progressing milestones.
-- **Dynamic Theming**: True Light, Dark, and System default global theme switching that dynamically alters the entire UI, including the Android OS navigation bar.
-- **Deep Link Sharing**: Built-in viral loop! Long-press any countdown to generate an Expo Deep Link that you can text to friends to import into their own app.
+- **Global Ticking Architecture**: Built with a centralized `TickerProvider` to gracefully update all active timers on the UI thread without destroying battery life.
+- **Hardware-Fused Qiblah Tracker**: Includes a buttery-smooth compass dial that leverages the native OS sensor fusion (`Location.watchHeadingAsync`) to continuously stabilize the needle against the device's tilt, isolating True North explicitly for exact geographical Qiblah alignment.
+- **AMOLED Pitch-Black Theming**: An ultra-premium UI adorned with deep slate surfaces and high-contrast Neon Cyan accents, supported by crisp `@expo/vector-icons`.
+- **Count-Up Milestones**: Set a date in the past to track your persisting milestones (e.g. "Days since I quit smoking").
 - **Smart Notifications**: 
-  - Daily "polite" reminders (e.g., "5 days to go") scheduled at 9:00 AM using a custom beep channel.
-  - Urgent exact-time alarms the moment an event reaches zero.
-  - Background-fetch resilience to automatically "top-up" local notifications and bypass the iOS 64-notification limit.
-- **Persistent Media Caching**: Select gallery images for your countdown backgrounds. The app securely moves the volatile cache into the permanent `documentDirectory` and actively cleans up orphaned images to prevent storage bloat over time.
-- **Auto-Archiving**: Countdowns that reach zero (and don't have a recurring schedule) automatically move onto a dedicated "Archive" tab.
+  - Daily scheduled local reminders using a custom notification sound channel.
+  - Background-fetch resilience to instantly "top-up" local notifications.
+- **Deep Link Viral Sharing**: Long-press any countdown card to magically generate a deep link that you can text to friends to import into their own app!
+- **Auto-Archiving**: Countdowns that reach zero (and don't have a recurring schedule) naturally transition onto a dedicated Archive screen.
 
 ## 🛠 Tech Stack
 
 - **Framework**: React Native 0.76 with [Expo SDK 52](https://expo.dev/)
 - **Routing**: Expo Router (File-based navigation)
 - **State/Data**: Context API + `@react-native-async-storage/async-storage`
-- **Animations**: `react-native-reanimated` + `expo-haptics`
-- **Native Modules**: `expo-file-system`, `expo-image-picker`, `expo-notifications`, `expo-av`, `expo-navigation-bar`, `expo-linking`
+- **Animations**: `react-native-reanimated` (Spring physics Engine)
+- **Hardware Integrations**: `expo-location` (Sensor heading fusion), `expo-notifications`, `expo-haptics`, `expo-file-system`, `expo-image-picker`
 
 ---
 
 ## 🚀 Getting Started
 
-This project is fully compatible with **Expo Go** (SDK 52), meaning you can run it immediately without needing an EAS custom dev client (though native Android features like `fullScreenIntent` for alarms over the lock-screen require a custom build).
+This project is fully compatible with **Expo Go** ensuring zero friction to start. 
 
 ### 1. Installation
 
@@ -39,7 +38,7 @@ cd countdown-app
 npm install
 ```
 
-### 2. Run the Development Server
+### 2. Run the Server
 
 Start the Metro Bundler:
 
@@ -47,7 +46,7 @@ Start the Metro Bundler:
 npx expo start
 ```
 
-Open the **Expo Go** app on your Android or iOS device and scan the QR code displayed in your terminal.
+Open the **Expo Go** app on your device (iOS or Android) and scan the massive QR code displayed in your terminal. For notifications to work reliably over the lock screen on Android, a custom dev client profile may be built (`npx expo run:android`).
 
 ---
 
@@ -55,15 +54,15 @@ Open the **Expo Go** app on your Android or iOS device and scan the QR code disp
 
 ```text
 countdown-app/
-├── app/                  # Expo Router file-based navigation (Timers, Archive, Modal)
-├── components/           # Reusable UI components (CountdownCard, HapticTab)
-├── context/              # Global state (Countdown, Ticker, Theme)
-├── hooks/                # Local storage CRUD & background notification schedulers
-├── types/                # TypeScript interfaces
+├── app/                  # Expo Router file-based (Drawer, Timers, Archive, Modal)
+├── components/           # Generous HitSlop-enabled UI pieces (CountdownCard)
+├── context/              # Centralized global contexts (Ticker, Theme)
+├── hooks/                # Async local storage handling & persistent notification loop
+├── types/                # Strict typed schemas
 ├── constants/            # Dynamic theme palettes & styling tokens
-└── assets/               # Sound files, splash screens, and icons
+└── assets/               # Local app manifest resources
 ```
 
 ---
 
-*Designed & developed for managing the moments that matter.*
+*Designed & developed for managing the moments that matter, no matter how far away they are.*

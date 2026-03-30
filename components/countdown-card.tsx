@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import * as Linking from 'expo-linking';
 import * as Haptics from 'expo-haptics';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
@@ -143,12 +144,20 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
           </Text>
         </View>
         <View style={styles.headerRight}>
-          {isUrgent && <Text style={styles.urgentBadge}>🔥 Today</Text>}
+          {isUrgent && (
+            <View style={styles.badgeContainer}>
+              <MaterialCommunityIcons name="fire" size={14} color="#FF6B6B" />
+              <Text style={styles.urgentBadge}>Today</Text>
+            </View>
+          )}
           {countdown.repeatInterval && (
-            <Text style={styles.repeatBadge}>🔁 {countdown.repeatInterval}</Text>
+            <View style={styles.badgeContainer}>
+               <MaterialCommunityIcons name="repeat" size={14} color={colors.textMuted} />
+               <Text style={styles.repeatBadge}>{countdown.repeatInterval}</Text>
+            </View>
           )}
           {countdown.notificationsEnabled && (
-            <Text style={styles.bellIcon}>🔔</Text>
+            <MaterialCommunityIcons name="bell-ring-outline" size={16} color={colors.accent} style={{ marginLeft: 4 }} />
           )}
         </View>
       </View>
@@ -193,6 +202,8 @@ export function CountdownCard({ countdown, index, onDelete, onArchive, onRenew, 
       <Animated.View style={animatedStyle}>
         <TouchableOpacity
           activeOpacity={0.85}
+          delayLongPress={300}
+          hitSlop={{ top: 10, bottom: 10, left: 0, right: 0 }}
           onLongPress={handleLongPress}
           style={[
             styles.card, 
@@ -223,11 +234,20 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
     padding: Spacing.md,
     marginBottom: Spacing.md,
     borderLeftWidth: 4,
+    borderWidth: 1,
+    borderTopColor: colors.border,
+    borderRightColor: colors.border,
+    borderBottomColor: colors.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   innerContainer: {
     padding: 0,
@@ -269,9 +289,6 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
   categoryText: {
     fontSize: 12,
     fontWeight: '600',
-  },
-  bellIcon: {
-    fontSize: 14,
   },
   title: {
     color: colors.text,

@@ -20,6 +20,11 @@ const MAPPING = {
   'chevron.right': 'chevron-right',
   'timer': 'timer',
   'archivebox.fill': 'inventory-2',
+  // Navigation screens
+  'map.fill': 'map',
+  'pin.fill': 'push-pin',
+  'car.fill': 'directions-car',
+  'location.fill': 'my-location',
 } as IconMapping;
 
 /**

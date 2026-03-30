@@ -8,6 +8,8 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { useCountdownContext } from '@/context/countdown-context';
 import { useThemeContext } from '@/context/theme-context';
@@ -31,22 +33,17 @@ export default function ArchiveScreen() {
   const colors = effectiveTheme === 'dark' ? DarkAppColors : LightAppColors;
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const handleLongPress = (id: string, title: string) => {
-    Alert.alert(title, 'What would you like to do?', [
-      {
-        text: 'Restore',
-        onPress: () => updateCountdown(id, { archivedAt: undefined, isRestored: true }),
-      },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () =>
-          Alert.alert('Delete Record', 'Permanently delete this record? This cannot be undone.', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive', onPress: () => deleteCountdown(id) },
-          ]),
-      },
+  const handleRestore = (id: string) => {
+    Alert.alert('Restore', 'Move this back to your active countdowns?', [
       { text: 'Cancel', style: 'cancel' },
+      { text: 'Restore', onPress: () => updateCountdown(id, { archivedAt: undefined, isRestored: true }) },
+    ]);
+  };
+
+  const handleDelete = (id: string, title: string) => {
+    Alert.alert('Delete Record', `Permanently delete "${title}"? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deleteCountdown(id) },
     ]);
   };
 
@@ -97,13 +94,13 @@ export default function ArchiveScreen() {
       )}
 
       {archivedCountdowns.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyIcon}>🏁</Text>
-          <Text style={styles.emptyTitle}>No completed countdowns</Text>
+        <Animated.View entering={FadeIn} style={styles.empty}>
+          <MaterialCommunityIcons name="archive-outline" size={80} color={colors.accent + '88'} style={{ marginBottom: Spacing.md }} />
+          <Text style={styles.emptyTitle}>Archive is empty</Text>
           <Text style={styles.emptySub}>
-            Countdowns that reach zero will appear here automatically
+            Completed countdowns will appear here automatically
           </Text>
-        </View>
+        </Animated.View>
       ) : (
         <FlatList
           data={sorted}
@@ -118,7 +115,6 @@ export default function ArchiveScreen() {
             return (
               <TouchableOpacity
                 activeOpacity={0.8}
-                onLongPress={() => handleLongPress(item.id, item.title)}
                 style={[styles.card, { borderLeftColor: accentColor }]}>
                 <View style={styles.row}>
                   <View style={[styles.badge, { backgroundColor: accentColor + '22' }]}>
@@ -126,7 +122,7 @@ export default function ArchiveScreen() {
                       {CATEGORY_LABELS[item.category]}
                     </Text>
                   </View>
-                  <Text style={styles.checkmark}>✅</Text>
+                  <MaterialCommunityIcons name="check-circle" size={18} color="#32cd32" />
                 </View>
 
                 <Text style={styles.title}>{item.title}</Text>
@@ -134,12 +130,11 @@ export default function ArchiveScreen() {
                 {/* Show notes if present */}
                 {item.notes ? (
                   <Text style={styles.notesText} numberOfLines={2}>
-                    📝 {item.notes}
+                    {item.notes}
                   </Text>
                 ) : null}
 
                 <Text style={styles.dateText}>
-                  📅{' '}
                   {targetDate.toLocaleDateString(undefined, {
                     month: 'long',
                     day: 'numeric',
@@ -158,7 +153,25 @@ export default function ArchiveScreen() {
                   </Text>
                 )}
 
-                <Text style={styles.longPressHint}>Hold to restore or delete</Text>
+                {/* Action buttons — visible instead of hidden long-press */}
+                <View style={styles.cardActions}>
+                  <TouchableOpacity
+                    style={[styles.cardActionBtn, { backgroundColor: colors.accent + '18' }]}
+                    onPress={() => handleRestore(item.id)}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name="restore" size={16} color={colors.accent} />
+                    <Text style={[styles.cardActionText, { color: colors.accent }]}>Restore</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.cardActionBtn, { backgroundColor: '#FF6B6B18' }]}
+                    onPress={() => handleDelete(item.id, item.title)}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name="trash-can-outline" size={16} color="#FF6B6B" />
+                    <Text style={[styles.cardActionText, { color: '#FF6B6B' }]}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
               </TouchableOpacity>
             );
           }}
@@ -220,10 +233,7 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Spacing.xl,
   },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: Spacing.md,
-  },
+
   emptyTitle: {
     color: colors.text,
     fontSize: 22,
@@ -250,12 +260,24 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  longPressHint: {
-    color: colors.textMuted,
-    fontSize: 10,
-    marginTop: Spacing.sm,
-    fontStyle: 'italic',
-    opacity: 0.6,
+
+  cardActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  cardActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+  },
+  cardActionText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   row: {
     flexDirection: 'row',
@@ -271,9 +293,6 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
   badgeText: {
     fontSize: 12,
     fontWeight: '600',
-  },
-  checkmark: {
-    fontSize: 16,
   },
   title: {
     color: colors.text,

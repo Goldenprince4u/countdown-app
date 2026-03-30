@@ -13,6 +13,7 @@ import * as Linking from 'expo-linking';
 import { useRouter, useNavigation } from 'expo-router';
 import { DrawerActions } from '@react-navigation/native';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 
 import { useCountdownContext } from '@/context/countdown-context';
 import { useThemeContext } from '@/context/theme-context';
@@ -106,9 +107,10 @@ export default function TimersScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity 
             onPress={() => navigation.dispatch(DrawerActions.openDrawer())} 
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={[styles.themeToggle, { marginRight: 12 }]}
           >
-            <Text style={styles.themeToggleIcon}>☰</Text>
+            <Ionicons name="menu" size={24} color={colors.text} />
           </TouchableOpacity>
           <View>
             <Text style={styles.headerTitle}>Countdowns</Text>
@@ -119,25 +121,30 @@ export default function TimersScreen() {
             </Text>
           </View>
         </View>
-        <TouchableOpacity onPress={toggleTheme} style={styles.themeToggle}>
-          <Text style={styles.themeToggleIcon}>
-            {themeMode === 'system' ? '⚙️' : themeMode === 'light' ? '☀️' : '🌙'}
-          </Text>
+        <TouchableOpacity onPress={toggleTheme} style={styles.themeToggle} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons 
+            name={themeMode === 'system' ? 'settings-outline' : themeMode === 'light' ? 'sunny-outline' : 'moon-outline'} 
+            size={22} 
+            color={colors.text} 
+          />
         </TouchableOpacity>
       </View>
 
       {/* ── Search Bar ── */}
       {activeCountdowns.length > 0 && (
         <View style={styles.searchRow}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search countdowns…"
-            placeholderTextColor={colors.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-          />
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color={colors.textMuted} style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search countdowns…"
+              placeholderTextColor={colors.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+          </View>
         </View>
       )}
 
@@ -180,15 +187,15 @@ export default function TimersScreen() {
       {/* ── List ── */}
       {loading ? null : activeCountdowns.length === 0 ? (
         <Animated.View entering={FadeIn} style={styles.empty}>
-          <Text style={styles.emptyIcon}>⏳</Text>
-          <Text style={styles.emptyTitle}>Nothing counting down yet</Text>
+          <MaterialCommunityIcons name="timer-sand-empty" size={80} color={colors.accent + '88'} style={{ marginBottom: Spacing.md }} />
+          <Text style={styles.emptyTitle}>Nothing counting down</Text>
           <Text style={styles.emptySub}>Tap the + button to add your first countdown</Text>
         </Animated.View>
       ) : filteredCountdowns.length === 0 ? (
         <Animated.View entering={FadeIn} style={styles.empty}>
-          <Text style={styles.emptyIcon}>🔍</Text>
+          <MaterialCommunityIcons name="text-search" size={80} color={colors.accent + '88'} style={{ marginBottom: Spacing.md }} />
           <Text style={styles.emptyTitle}>No results</Text>
-          <Text style={styles.emptySub}>Try a different search or category filter</Text>
+          <Text style={styles.emptySub}>Try a different search or category</Text>
         </Animated.View>
       ) : (
         <FlatList
@@ -215,7 +222,7 @@ export default function TimersScreen() {
         style={styles.fab}
         activeOpacity={0.85}
         onPress={() => router.push('/modal')}>
-        <Text style={styles.fabIcon}>＋</Text>
+        <Ionicons name="add" size={32} color="#fff" style={{ marginLeft: 2 }} />
       </TouchableOpacity>
     </View>
   );
@@ -249,27 +256,34 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
     padding: Spacing.xs,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.full,
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  themeToggleIcon: {
-    fontSize: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   searchRow: {
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.sm,
   },
-  searchInput: {
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.surface,
-    color: colors.text,
     borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    fontSize: 15,
     borderWidth: 1,
     borderColor: colors.border,
+    paddingHorizontal: Spacing.md,
+  },
+  searchIcon: {
+    marginRight: Spacing.xs,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text,
+    paddingVertical: 10,
+    fontSize: 15,
   },
   filterRow: {
     flexDirection: 'row',
@@ -303,10 +317,6 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Spacing.xl,
   },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: Spacing.md,
-  },
   emptyTitle: {
     color: colors.text,
     fontSize: 22,
@@ -335,11 +345,5 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 12,
     elevation: 10,
-  },
-  fabIcon: {
-    color: '#fff',
-    fontSize: 28,
-    lineHeight: 32,
-    fontWeight: '300',
   },
 });

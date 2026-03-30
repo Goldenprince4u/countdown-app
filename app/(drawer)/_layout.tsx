@@ -22,7 +22,13 @@ export default function DrawerLayout() {
           drawerActiveTintColor: colors.accent,
           drawerInactiveTintColor: colors.textMuted,
           headerTitleStyle: {
+            fontWeight: '700',
+            fontSize: 17,
+          },
+          drawerLabelStyle: {
             fontWeight: '600',
+            fontSize: 15,
+            marginLeft: -8,
           },
         }}>
         <Drawer.Screen
@@ -35,10 +41,34 @@ export default function DrawerLayout() {
           }}
         />
         <Drawer.Screen
+          name="map"
+          options={{
+            drawerLabel: 'Live Map',
+            title: 'Live Map',
+            drawerIcon: ({ color }) => <IconSymbol size={24} name="map.fill" color={color} />,
+          }}
+        />
+        <Drawer.Screen
+          name="waypoint"
+          options={{
+            drawerLabel: 'Waypoint Tracker',
+            title: 'Waypoint Tracker',
+            drawerIcon: ({ color }) => <IconSymbol size={24} name="pin.fill" color={color} />,
+          }}
+        />
+        <Drawer.Screen
+          name="dashboard"
+          options={{
+            drawerLabel: 'Trip Dashboard',
+            title: 'Trip Dashboard',
+            drawerIcon: ({ color }) => <IconSymbol size={24} name="car.fill" color={color} />,
+          }}
+        />
+        <Drawer.Screen
           name="compass"
           options={{
-            drawerLabel: 'Compass',
-            title: 'Compass',
+            drawerLabel: 'Compass & Qiblah',
+            title: 'Compass & Qiblah',
             drawerIcon: ({ color }) => <IconSymbol size={24} name="location.fill" color={color} />,
           }}
         />

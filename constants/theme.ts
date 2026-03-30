@@ -28,27 +28,27 @@ export const Colors = {
   },
 };
 
-// ─── App-wide dark UI palette ─────────────────────────────────────────────────
+// ─── App-wide premium UI palette ─────────────────────────────────────────────────
 export const DarkAppColors = {
-  bg:          '#0D0D1A',
-  surface:     '#16162A',
-  surfaceAlt:  '#1E1E38',
+  bg:          '#000000',     // AMOLED Pitch Black
+  surface:     '#12121A',     // Deep space gray
+  surfaceAlt:  '#1C1C28',     // Slightly lighter for elevated surfaces
   border:      'rgba(255,255,255,0.08)',
-  text:        '#F0F0FF',
-  textMuted:   '#8888AA',
-  accent:      '#6C63FF',
-  accentLight: '#A89BFF',
+  text:        '#FFFFFF',
+  textMuted:   '#8E8E9E',
+  accent:      '#00E5FF',     // Vibrant neon cyan accent
+  accentLight: '#80F2FF',
 };
 
 export const LightAppColors = {
-  bg:          '#F4F4F9',
+  bg:          '#F4F6F9',     // Clean soft gray
   surface:     '#FFFFFF',
-  surfaceAlt:  '#EAEAF2',
+  surfaceAlt:  '#EBEBF2',
   border:      'rgba(0,0,0,0.08)',
   text:        '#11181C',
   textMuted:   '#687076',
-  accent:      '#6C63FF',
-  accentLight: '#A89BFF',
+  accent:      '#00B3CC',     // Deeper cyan for visibility in light mode
+  accentLight: '#80F2FF',
 };
 
 // Alias for backwards compatibility during refactor
