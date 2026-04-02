@@ -11,6 +11,8 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -498,10 +500,24 @@ export default function WaypointScreen() {
       </ScrollView>
 
       {/* Save Modal */}
-      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => { setModalVisible(false); setEditingId(null); }}>
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => { setModalVisible(false); setEditingId(null); }}
+      >
+        {/* KeyboardAvoidingView ensures the sheet slides above the keyboard when
+            autoFocus fires the TextInput on modal mount. Without this, the keyboard
+            overlaps the sheet and hides the title + input, leaving only icons visible. */}
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+        >
           <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>{editingId ? 'Edit Waypoint' : 'Name This Waypoint'}</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              {editingId ? 'Edit Waypoint' : 'Name This Waypoint'}
+            </Text>
             <TextInput
               style={[styles.nameInput, { color: colors.text, backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
               placeholder="E.g. My Car, Hotel, Campsite..."
@@ -519,7 +535,14 @@ export default function WaypointScreen() {
               {WP_ICONS.map((ic) => (
                 <TouchableOpacity
                   key={ic.key}
-                  style={[styles.iconPickerBtn, { backgroundColor: `${ic.color}22`, borderColor: wpIconKey === ic.key ? ic.color : 'transparent', borderWidth: 2 }]}
+                  style={[
+                    styles.iconPickerBtn,
+                    {
+                      backgroundColor: `${ic.color}22`,
+                      borderColor: wpIconKey === ic.key ? ic.color : 'transparent',
+                      borderWidth: 2,
+                    },
+                  ]}
                   onPress={() => setWpIconKey(ic.key)}
                 >
                   <MaterialCommunityIcons name={ic.icon as any} size={26} color={ic.color} />
@@ -527,16 +550,22 @@ export default function WaypointScreen() {
               ))}
             </View>
             <View style={styles.modalActions}>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.surfaceAlt }]} onPress={() => { setModalVisible(false); setEditingId(null); }}>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: colors.surfaceAlt }]}
+                onPress={() => { setModalVisible(false); setEditingId(null); }}
+              >
                 <Text style={{ color: colors.textMuted, fontWeight: '700' }}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#32cd32' }]} onPress={confirmSave}>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: '#32cd32' }]}
+                onPress={confirmSave}
+              >
                 <MaterialCommunityIcons name="check" size={18} color="#fff" />
                 <Text style={{ color: '#fff', fontWeight: '700' }}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
