@@ -11,7 +11,7 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
 } from 'react-native';
 import * as Location from 'expo-location';
@@ -93,7 +93,8 @@ export default function WaypointScreen() {
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
-  const [heading, setHeading] = useState(0);
+  const [heading, setHeading] = useState<number | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Modal
@@ -113,6 +114,21 @@ export default function WaypointScreen() {
 
   const activeWaypoint = waypoints.find((w) => w.id === activeId) ?? null;
   const near = distance !== null && distance <= 20;
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // ─── Storage ──────────────────────────────────────────────────────────────
 
@@ -506,14 +522,9 @@ export default function WaypointScreen() {
         animationType="slide"
         onRequestClose={() => { setModalVisible(false); setEditingId(null); }}
       >
-        {/* KeyboardAvoidingView ensures the sheet slides above the keyboard when
-            autoFocus fires the TextInput on modal mount. Without this, the keyboard
-            overlaps the sheet and hides the title + input, leaving only icons visible. */}
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior="padding"
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
-        >
+        {/* Bulletproof Android/iOS transparent modal keyboard fix:
+            Manual paddingBottom matching the exact keyboard height */}
+        <View style={[styles.modalOverlay, { paddingBottom: keyboardHeight }]}>
           <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>
               {editingId ? 'Edit Waypoint' : 'Name This Waypoint'}
@@ -565,7 +576,7 @@ export default function WaypointScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
     </View>
   );
