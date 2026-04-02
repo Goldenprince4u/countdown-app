@@ -346,7 +346,7 @@ export default function WaypointScreen() {
   }, [isDark]);
 
   const activeIconMeta = WP_ICONS.find((i) => i.key === wpIconKey) ?? WP_ICONS[0];
-  const currentWpIcon = WP_ICONS.find((i) => i.key === (activeWaypoint as any)?.icon) ?? WP_ICONS[0];
+  // currentWpIcon removed — icon is displayed per-row inside the .map() below
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
@@ -435,7 +435,7 @@ export default function WaypointScreen() {
             <Text style={[styles.listTitle, { color: colors.textMuted }]}>SAVED WAYPOINTS ({waypoints.length}/20)</Text>
             {waypoints.map((wp, idx) => {
               const isActive = wp.id === activeId;
-              const wpIcon = WP_ICONS.find((i) => i.key === (wp as any).icon) ?? WP_ICONS[0];
+              const wpIcon = WP_ICONS.find((i) => i.key === wp.icon) ?? WP_ICONS[0];
               return (
                 <Animated.View key={wp.id} entering={FadeInDown.delay(idx * 60).springify()}>
                   <Swipeable
