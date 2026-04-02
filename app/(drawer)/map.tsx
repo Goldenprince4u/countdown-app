@@ -11,6 +11,7 @@ import {
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 
 import { useThemeContext } from '@/context/theme-context';
 import { DarkAppColors, LightAppColors, Spacing, Radius } from '@/constants/theme';
@@ -20,16 +21,24 @@ const { width, height } = Dimensions.get('window');
 type MapLayer = 'street' | 'satellite' | 'terrain';
 
 export default function MapScreen() {
+  const { lat: pLat, lng: pLng, name: pName } = useLocalSearchParams();
+  const targetLat = pLat ? parseFloat(pLat as string) : null;
+  const targetLng = pLng ? parseFloat(pLng as string) : null;
+  const targetName = (pName as string) || 'Waypoint';
+
   const { effectiveTheme } = useThemeContext();
   const colors = effectiveTheme === 'dark' ? DarkAppColors : LightAppColors;
   const isDark = effectiveTheme === 'dark';
 
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [address, setAddress] = useState<string>('Locating...');
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(
+    targetLat && targetLng ? { lat: targetLat, lng: targetLng } : null
+  );
+  const [address, setAddress] = useState<string>(targetName && targetLat ? `Waypoint: ${targetName}` : 'Locating...');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [mapLayer, setMapLayer] = useState<MapLayer>('street');
   const [mapReady, setMapReady] = useState(false);
-  const [coordsText, setCoordsText] = useState<string>('');
+  const [coordsText, setCoordsText] = useState<string>(targetLat && targetLng ? `${targetLat.toFixed(5)}, ${targetLng.toFixed(5)}` : '');
   const webViewRef = useRef<WebView>(null);
 
   useEffect(() => {
@@ -47,23 +56,35 @@ export default function MapScreen() {
         });
         const { latitude, longitude } = loc.coords;
         setLocation({ lat: latitude, lng: longitude });
-        setCoordsText(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
 
-        // Reverse geocode to get a readable address
-        const geo = await Location.reverseGeocodeAsync({ latitude, longitude });
-        if (geo && geo.length > 0) {
-          const g = geo[0];
-          const parts = [g.name, g.street, g.city, g.region].filter(Boolean);
-          setAddress(parts.slice(0, 3).join(', ') || 'Unknown location');
+        if (!mapCenter) {
+          setMapCenter({ lat: latitude, lng: longitude });
+        }
+
+        if (!targetLat) {
+          setCoordsText(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+          // Reverse geocode to get a readable address
+          const geo = await Location.reverseGeocodeAsync({ latitude, longitude });
+          if (geo && geo.length > 0) {
+            const g = geo[0];
+            const parts = [g.name, g.street, g.city, g.region].filter(Boolean);
+            setAddress(parts.slice(0, 3).join(', ') || 'Unknown location');
+          }
         }
       } catch {
         setErrorMsg('Could not fetch GPS position.');
-        setAddress('GPS unavailable');
+        if (!targetLat) setAddress('GPS unavailable');
       }
     })();
   }, []);
 
-  const buildLeafletHTML = (lat: number, lng: number, layer: MapLayer, dark: boolean) => {
+  const buildLeafletHTML = (
+    centerLoc: { lat: number; lng: number },
+    userLoc: { lat: number; lng: number } | null,
+    target: { lat: number; lng: number; name: string } | null,
+    layer: MapLayer,
+    dark: boolean
+  ) => {
     // CartoDB tiles: no referrer requirement, free, high quality, globally available
     // Esri World Imagery: best free satellite option, correct {z}/{y}/{x} ordering
     const tileLayers: Record<MapLayer, { url: string; attribution: string; crossOrigin: boolean }> = {
@@ -91,7 +112,6 @@ export default function MapScreen() {
 
     const tile = tileLayers[layer];
     const bgColor = dark ? '#12121A' : '#F4F6F9';
-    const cardBg = dark ? 'rgba(18,18,26,0.92)' : 'rgba(255,255,255,0.92)';
     const textColor = dark ? '#FFFFFF' : '#11181C';
     const accentColor = dark ? '#00E5FF' : '#00B3CC';
 
@@ -121,6 +141,13 @@ export default function MapScreen() {
       50% { box-shadow: 0 0 0 12px ${accentColor}11; }
       100% { box-shadow: 0 0 0 4px ${accentColor}44; }
     }
+    .waypoint-pin {
+      width: 24px; height: 24px;
+      background: #FF6B6B;
+      border: 3px solid white;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+    }
   </style>
 </head>
 <body>
@@ -129,7 +156,7 @@ export default function MapScreen() {
     var map = L.map('map', {
       zoomControl: true,
       attributionControl: true
-    }).setView([${lat}, ${lng}], 15);
+    }).setView([${centerLoc.lat}, ${centerLoc.lng}], 15);
 
     var currentTileLayer = L.tileLayer('${tile.url}', {
       attribution: '${tile.attribution}',
@@ -138,6 +165,7 @@ export default function MapScreen() {
       crossOrigin: false
     }).addTo(map);
 
+    ${userLoc ? `
     // Pulsing dot for current location
     var dotIcon = L.divIcon({
       className: '',
@@ -145,12 +173,26 @@ export default function MapScreen() {
       iconSize: [18, 18],
       iconAnchor: [9, 9],
     });
-    L.marker([${lat}, ${lng}], { icon: dotIcon })
+    L.marker([${userLoc.lat}, ${userLoc.lng}], { icon: dotIcon })
       .addTo(map)
       .bindPopup('<b style="color:${textColor}">You are here</b>');
 
     // Accuracy circle
-    L.circle([${lat}, ${lng}], { radius: 40, color: '${accentColor}', fillColor: '${accentColor}', fillOpacity: 0.08, weight: 1 }).addTo(map);
+    L.circle([${userLoc.lat}, ${userLoc.lng}], { radius: 40, color: '${accentColor}', fillColor: '${accentColor}', fillOpacity: 0.08, weight: 1 }).addTo(map);
+    ` : ''}
+
+    ${target ? `
+    // Target Waypoint
+    var targetIcon = L.divIcon({
+      className: '',
+      html: '<div class="waypoint-pin"></div>',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+    L.marker([${target.lat}, ${target.lng}], { icon: targetIcon })
+      .addTo(map)
+      .bindPopup('<b style="color:${textColor}">${target.name}</b>').openPopup();
+    ` : ''}
 
     // Listen for messages from React Native
     window.addEventListener('message', function(event) {
@@ -204,6 +246,8 @@ export default function MapScreen() {
   const handleRecenter = () => {
     if (location) {
       sendMessageToMap({ type: 'CENTER', lat: location.lat, lng: location.lng });
+    } else if (mapCenter) {
+      sendMessageToMap({ type: 'CENTER', lat: mapCenter.lat, lng: mapCenter.lng });
     }
   };
 
@@ -234,11 +278,20 @@ export default function MapScreen() {
 
       {/* Map Area */}
       <View style={styles.mapContainer}>
-        {location ? (
+        {mapCenter ? (
           <WebView
             ref={webViewRef}
             style={styles.map}
-            source={{ html: buildLeafletHTML(location.lat, location.lng, mapLayer, isDark), baseUrl: 'https://localhost' }}
+            source={{
+              html: buildLeafletHTML(
+                mapCenter,
+                location,
+                targetLat && targetLng ? { lat: targetLat, lng: targetLng, name: targetName } : null,
+                mapLayer,
+                isDark
+              ),
+              baseUrl: 'https://localhost'
+            }}
             originWhitelist={['*']}
             userAgent="Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
             javaScriptEnabled={true}

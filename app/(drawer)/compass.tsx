@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, Text, View, Dimensions, AppState, AppStateStatus, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { useThemeContext } from '@/context/theme-context';
 import { DarkAppColors, LightAppColors, Spacing, Radius } from '@/constants/theme';
+
+/**
+ * NOTE: This screen uses Location.watchHeadingAsync for FOREGROUND heading only.
+ * Background heading is intentionally NOT enabled. To add it, you would need
+ * "isDeviceMotionEnabled" in app.json and the location background permission.
+ */
 
 const { width } = Dimensions.get('window');
 const COMPASS_SIZE = width * 0.85;
@@ -14,6 +21,7 @@ export default function CompassScreen() {
   const { effectiveTheme } = useThemeContext();
   const colors = effectiveTheme === 'dark' ? DarkAppColors : LightAppColors;
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
 
   const [headingText, setHeadingText] = useState(0);
   const [mode, setMode] = useState<'compass' | 'qiblah'>('compass');
@@ -23,6 +31,9 @@ export default function CompassScreen() {
   const rotation = useSharedValue(0);
   const unboundedHeadingRef = useRef(0);
   const watchSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
+  // Track whether Qiblah GPS fetch has already been attempted, to prevent
+  // re-fetching (and re-mounting the heading watcher) every time bearing updates.
+  const qiblahFetchedRef = useRef(false);
 
   const calculateQiblah = (lat: number, lng: number) => {
     const latk = 21.422487 * (Math.PI / 180);
@@ -55,15 +66,16 @@ export default function CompassScreen() {
       
       setErrorMsg(null);
 
-      if (mode === 'qiblah' && qiblahBearing === null) {
+      if (mode === 'qiblah' && !qiblahFetchedRef.current) {
+        qiblahFetchedRef.current = true;
         try {
-          let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
           if (isActive) {
             const bearing = calculateQiblah(loc.coords.latitude, loc.coords.longitude);
             setQiblahBearing(Math.round(bearing));
           }
-        } catch (e) {
-          setErrorMsg("Could not lock GPS for Qiblah.");
+        } catch {
+          setErrorMsg('Could not lock GPS for Qiblah.');
         }
       }
 
@@ -116,7 +128,8 @@ export default function CompassScreen() {
       stopLocationWatcher();
       appStateSub.remove();
     };
-  }, [mode, qiblahBearing, rotation]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]); // Only re-run when switching compass ↔ qiblah modes
 
   const animatedStyles = useAnimatedStyle(() => {
     return {
@@ -193,7 +206,7 @@ export default function CompassScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 16) }]}>
       <View style={styles.headerBlock}>
         <Text style={[styles.headingDegreeText, isQiblahAligned ? { color: '#00E5FF' } : null]}>
           {headingText}°
@@ -214,7 +227,7 @@ export default function CompassScreen() {
             {renderLabels()}
             
             {mode === 'qiblah' && qiblahBearing !== null && (
-              <View style={[[styles.labelContainer, { transform: [{ rotate: `${qiblahBearing}deg` }] }]]}>
+              <View style={[styles.labelContainer, { transform: [{ rotate: `${qiblahBearing}deg` }] }]}>
                  <View style={styles.qiblahIndicator}>
                    <MaterialCommunityIcons name="star-crescent" size={28} color="#00E5FF" style={{ textShadowColor: '#00E5FF', textShadowRadius: 8 }}/>
                    <View style={styles.qiblahBeam} />
@@ -280,8 +293,8 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
   },
   headerBlock: {
     alignItems: 'center',
-    marginBottom: 50,
-    height: 120,
+    marginBottom: Spacing.xxl,
+    minHeight: 100,
     justifyContent: 'center',
   },
   headingDegreeText: {
@@ -319,7 +332,7 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
     justifyContent: 'center',
     width: COMPASS_SIZE,
     height: COMPASS_SIZE,
-    marginTop: 10,
+    marginTop: Spacing.sm,
   },
   fixedPointerContainer: {
     position: 'absolute',
@@ -447,12 +460,12 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
     backgroundColor: colors.surface,
   },
   instructionBox: {
-    marginTop: 35,
+    marginTop: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 28,
     gap: Spacing.sm,
-    height: 50,
+    minHeight: 50,
   },
   instructionText: {
     fontSize: 14,
@@ -463,7 +476,7 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
   },
   toggleContainer: {
     flexDirection: 'row',
-    marginTop: 15,
+    marginTop: Spacing.md,
     backgroundColor: colors.surface,
     padding: 6,
     borderRadius: Radius.full,

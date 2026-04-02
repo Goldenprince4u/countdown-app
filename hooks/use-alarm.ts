@@ -1,6 +1,9 @@
 import { useRef, useCallback } from 'react';
 import { Audio } from 'expo-av';
 
+/** Maximum alarm duration in seconds — prevents runaway alarms */
+const MAX_ALARM_DURATION_SECONDS = 60;
+
 // Preload phase: resolve the asset once at module level so every card
 // shares a single loaded Sound instance when triggered.
 let _sound: Audio.Sound | null = null;
@@ -31,6 +34,7 @@ async function ensureSound(): Promise<Audio.Sound> {
  * useAlarm
  * Plays the bundled alarm file for `durationSeconds` seconds then stops
  * automatically. Calling `playAlarm` while already playing is a no-op.
+ * Duration is capped at MAX_ALARM_DURATION_SECONDS (60 s).
  */
 export function useAlarm() {
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -56,6 +60,9 @@ export function useAlarm() {
       if (isPlayingRef.current) return; // already ringing
       isPlayingRef.current = true;
 
+      // Hard cap — never ring for more than 60 seconds
+      const clampedDuration = Math.min(Math.max(1, durationSeconds), MAX_ALARM_DURATION_SECONDS);
+
       try {
         const sound = await ensureSound();
         await sound.setPositionAsync(0);
@@ -64,7 +71,7 @@ export function useAlarm() {
         // Auto-stop after the requested duration
         stopTimerRef.current = setTimeout(() => {
           stopAlarm();
-        }, durationSeconds * 1000);
+        }, clampedDuration * 1000);
       } catch (e) {
         console.warn('Alarm playback error:', e);
         isPlayingRef.current = false;

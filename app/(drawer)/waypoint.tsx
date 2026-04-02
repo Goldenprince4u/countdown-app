@@ -10,10 +10,13 @@ import {
   ScrollView,
   Modal,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, {
+  FadeIn,
+  FadeInDown,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -21,7 +24,9 @@ import Animated, {
   withSequence,
   Easing,
 } from 'react-native-reanimated';
+import { Swipeable } from 'react-native-gesture-handler';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 import { useThemeContext } from '@/context/theme-context';
 import { DarkAppColors, LightAppColors, Spacing, Radius } from '@/constants/theme';
@@ -62,6 +67,7 @@ type Waypoint = {
   lat: number;
   lng: number;
   savedAt: number;
+  icon?: string; // WP_ICONS key (e.g. 'car', 'flag')
 };
 
 // ─── Preset icons ────────────────────────────────────────────────────────────
@@ -77,6 +83,7 @@ const WP_ICONS = [
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function WaypointScreen() {
+  const router = useRouter();
   const { effectiveTheme } = useThemeContext();
   const colors = effectiveTheme === 'dark' ? DarkAppColors : LightAppColors;
   const isDark = effectiveTheme === 'dark';
@@ -89,9 +96,11 @@ export default function WaypointScreen() {
 
   // Modal
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [wpName, setWpName] = useState('');
   const [wpIconKey, setWpIconKey] = useState('car');
   const [savingLoc, setSavingLoc] = useState<{ lat: number; lng: number } | null>(null);
+  const [isFetchingGPS, setIsFetchingGPS] = useState(false);
 
   const rotation = useSharedValue(0);
   const pulseScale = useSharedValue(1);
@@ -196,33 +205,89 @@ export default function WaypointScreen() {
 
   // ─── Saving flows ─────────────────────────────────────────────────────────
 
-  const openSaveModal = async () => {
-    if (waypoints.length >= 5) {
-      Alert.alert('Limit reached', 'You can save up to 5 waypoints. Delete one to continue.');
+  const openSaveModal = async (wpToEdit?: Waypoint) => {
+    if (wpToEdit) {
+      setEditingId(wpToEdit.id);
+      setWpName(wpToEdit.name);
+      setWpIconKey(wpToEdit.icon || 'car');
+      setSavingLoc({ lat: wpToEdit.lat, lng: wpToEdit.lng });
+      setModalVisible(true);
       return;
     }
+
+    if (waypoints.length >= 20) {
+      Alert.alert('Limit reached', 'You can save up to 20 waypoints. Delete one to continue.');
+      return;
+    }
+
+    setIsFetchingGPS(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') { Alert.alert('Permission required', 'Allow location access first.'); return; }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      setSavingLoc({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Allow location access to save waypoints.');
+        return;
+      }
+
+      // 1. Fast path: use last-known position if it's fresh (< 60 s)
+      let coords: { lat: number; lng: number } | null = null;
+      try {
+        const last = await Location.getLastKnownPositionAsync({
+          maxAge: 60_000,       // accept readings up to 60 s old
+          requiredAccuracy: 200, // within 200 m is fine for saving a spot
+        });
+        if (last) {
+          coords = { lat: last.coords.latitude, lng: last.coords.longitude };
+        }
+      } catch { /* ignore — will fall through to fresh fetch */ }
+
+      // 2. Fresh fetch if no recent fix available
+      if (!coords) {
+        // Race a Balanced-accuracy fix against a 15-second timeout
+        const fixPromise = Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('GPS timeout')), 15_000)
+        );
+        const loc = await Promise.race([fixPromise, timeoutPromise]);
+        coords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+      }
+
+      setSavingLoc(coords);
       setWpName('');
       setWpIconKey('car');
       setModalVisible(true);
-    } catch {
-      Alert.alert('Error', 'Could not get GPS position.');
+    } catch (e: any) {
+      const msg = e?.message === 'GPS timeout'
+        ? 'Could not get a GPS fix in time. Try moving outdoors and try again.'
+        : 'Could not get GPS position. Check location permissions.';
+      Alert.alert('GPS Error', msg);
+    } finally {
+      setIsFetchingGPS(false);
     }
   };
 
   const confirmSave = async () => {
     if (!savingLoc) return;
     const name = wpName.trim() || 'My Spot';
+
+    if (editingId) {
+      const updated = waypoints.map(w =>
+        w.id === editingId ? { ...w, name, icon: wpIconKey } : w
+      );
+      await persist(updated);
+      setEditingId(null);
+      setModalVisible(false);
+      return;
+    }
+
     const newWp: Waypoint = {
       id: Date.now().toString(),
       name,
       lat: savingLoc.lat,
       lng: savingLoc.lng,
       savedAt: Date.now(),
+      icon: wpIconKey,
     };
     const updated = [...waypoints, newWp];
     await persist(updated);
@@ -334,52 +399,98 @@ export default function WaypointScreen() {
 
         {/* Save Button */}
         <TouchableOpacity
-          style={[styles.saveBtn, { backgroundColor: '#32cd321A', borderColor: '#32cd32' }]}
-          onPress={openSaveModal}
+          style={[
+            styles.saveBtn,
+            { backgroundColor: '#32cd321A', borderColor: '#32cd32' },
+            isFetchingGPS && { opacity: 0.5 }
+          ]}
+          onPress={() => openSaveModal()}
           activeOpacity={0.8}
+          disabled={isFetchingGPS}
         >
-          <MaterialCommunityIcons name="map-marker-plus" size={22} color="#32cd32" />
-          <Text style={[styles.saveBtnText, { color: '#32cd32' }]}>Save Current Location</Text>
+          {isFetchingGPS ? (
+            <ActivityIndicator color="#32cd32" size="small" />
+          ) : (
+            <MaterialCommunityIcons name="map-marker-plus" size={22} color="#32cd32" />
+          )}
+          <Text style={[styles.saveBtnText, { color: '#32cd32' }]}>
+            {isFetchingGPS ? 'Acquiring GPS...' : 'Save Current Location'}
+          </Text>
         </TouchableOpacity>
+
+        {/* Empty state */}
+        {waypoints.length === 0 && (
+          <Animated.View entering={FadeInDown.delay(200)} style={styles.emptyState}>
+            <MaterialCommunityIcons name="map-marker-off" size={48} color={colors.border} style={{ marginBottom: 12 }} />
+            <Text style={[styles.emptyTitle, { color: colors.textMuted }]}>No waypoints saved yet</Text>
+            <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+              Tap “Save Current Location” to mark your first spot, then tap a waypoint to navigate to it.
+            </Text>
+          </Animated.View>
+        )}
 
         {/* Waypoint List */}
         {waypoints.length > 0 && (
           <View style={styles.listContainer}>
-            <Text style={[styles.listTitle, { color: colors.textMuted }]}>SAVED WAYPOINTS ({waypoints.length}/5)</Text>
-            {waypoints.map((wp) => {
+            <Text style={[styles.listTitle, { color: colors.textMuted }]}>SAVED WAYPOINTS ({waypoints.length}/20)</Text>
+            {waypoints.map((wp, idx) => {
               const isActive = wp.id === activeId;
               const wpIcon = WP_ICONS.find((i) => i.key === (wp as any).icon) ?? WP_ICONS[0];
               return (
-                <TouchableOpacity
-                  key={wp.id}
-                  style={[
-                    styles.wpCard,
-                    {
-                      backgroundColor: isActive ? (isDark ? '#32cd321A' : '#32cd3215') : colors.surface,
-                      borderColor: isActive ? '#32cd32' : colors.border,
-                    },
-                  ]}
-                  onPress={() => { setActiveId(wp.id); setDistance(null); }}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.wpIconCircle, { backgroundColor: `${wpIcon.color}22` }]}>
-                    <MaterialCommunityIcons name={wpIcon.icon as any} size={22} color={wpIcon.color} />
-                  </View>
-                  <View style={styles.wpInfo}>
-                    <Text style={[styles.wpName, { color: colors.text }]}>{wp.name}</Text>
-                    <Text style={[styles.wpCoords, { color: colors.textMuted }]}>
-                      {wp.lat.toFixed(5)}, {wp.lng.toFixed(5)}
-                    </Text>
-                  </View>
-                  {isActive && (
-                    <View style={styles.activeChip}>
-                      <MaterialCommunityIcons name="navigation" size={14} color="#32cd32" />
-                    </View>
-                  )}
-                  <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteWaypoint(wp.id)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                    <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.textMuted} />
-                  </TouchableOpacity>
-                </TouchableOpacity>
+                <Animated.View key={wp.id} entering={FadeInDown.delay(idx * 60).springify()}>
+                  <Swipeable
+                    renderRightActions={() => (
+                      <TouchableOpacity
+                        accessibilityLabel={`Delete waypoint ${wp.name}`}
+                        accessibilityRole="button"
+                        style={styles.swipeDelete}
+                        onPress={() => deleteWaypoint(wp.id)}
+                      >
+                        <MaterialCommunityIcons name="trash-can-outline" size={22} color="#FF6B6B" />
+                        <Text style={styles.swipeDeleteText}>Delete</Text>
+                      </TouchableOpacity>
+                    )}
+                    rightThreshold={40}
+                    overshootRight={false}
+                    friction={2}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.wpCard,
+                        {
+                          backgroundColor: isActive ? (isDark ? '#32cd321A' : '#32cd3215') : colors.surface,
+                          borderColor: isActive ? '#32cd32' : colors.border,
+                        },
+                      ]}
+                      onPress={() => { setActiveId(wp.id); setDistance(null); }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.wpIconCircle, { backgroundColor: `${wpIcon.color}22` }]}>
+                        <MaterialCommunityIcons name={wpIcon.icon as any} size={22} color={wpIcon.color} />
+                      </View>
+                      <View style={styles.wpInfo}>
+                        <Text style={[styles.wpName, { color: colors.text }]} numberOfLines={1}>{wp.name}</Text>
+                        <Text style={[styles.wpCoords, { color: colors.textMuted }]}>
+                          {wp.lat.toFixed(5)}, {wp.lng.toFixed(5)}
+                        </Text>
+                      </View>
+                      {isActive && (
+                        <View style={styles.activeChip}>
+                          <MaterialCommunityIcons name="navigation" size={12} color="#32cd32" />
+                          <Text style={styles.activeChipText}>Navigating</Text>
+                        </View>
+                      )}
+                      <View style={styles.wpActions}>
+                        <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/(drawer)/map?lat=${wp.lat}&lng=${wp.lng}&name=${encodeURIComponent(wp.name)}`)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <MaterialCommunityIcons name="map-outline" size={20} color={colors.textMuted} />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.actionBtn} onPress={() => openSaveModal(wp)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableOpacity>
+                  </Swipeable>
+                </Animated.View>
               );
             })}
           </View>
@@ -387,10 +498,10 @@ export default function WaypointScreen() {
       </ScrollView>
 
       {/* Save Modal */}
-      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
+      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => { setModalVisible(false); setEditingId(null); }}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Name This Waypoint</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>{editingId ? 'Edit Waypoint' : 'Name This Waypoint'}</Text>
             <TextInput
               style={[styles.nameInput, { color: colors.text, backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
               placeholder="E.g. My Car, Hotel, Campsite..."
@@ -416,7 +527,7 @@ export default function WaypointScreen() {
               ))}
             </View>
             <View style={styles.modalActions}>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.surfaceAlt }]} onPress={() => setModalVisible(false)}>
+              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.surfaceAlt }]} onPress={() => { setModalVisible(false); setEditingId(null); }}>
                 <Text style={{ color: colors.textMuted, fontWeight: '700' }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#32cd32' }]} onPress={confirmSave}>
@@ -580,13 +691,60 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   activeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: Radius.full,
     backgroundColor: '#32cd321A',
+    gap: 4,
   },
-  deleteBtn: {
-    padding: 4,
+  activeChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#32cd32',
+  },
+  swipeDelete: {
+    width: 72,
+    backgroundColor: '#FF6B6B18',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginBottom: Spacing.sm,
+    borderTopRightRadius: Radius.lg,
+    borderBottomRightRadius: Radius.lg,
+  },
+  swipeDeleteText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FF6B6B',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  emptySub: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
+    opacity: 0.75,
+  },
+  wpActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionBtn: {
+    padding: 6,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(128,128,128,0.1)',
   },
   // Modal
   modalOverlay: {

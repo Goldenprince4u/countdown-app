@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
@@ -60,9 +61,12 @@ export default function DashboardScreen() {
   const { effectiveTheme } = useThemeContext();
   const colors = effectiveTheme === 'dark' ? DarkAppColors : LightAppColors;
   const isDark = effectiveTheme === 'dark';
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
 
   const [unit, setUnit] = useState<'kmh' | 'mph'>('kmh');
   const [speedKmh, setSpeedKmh] = useState(0);
+  const [speedTrend, setSpeedTrend] = useState<'up' | 'down' | 'flat'>('flat');
   const [maxSpeedKmh, setMaxSpeedKmh] = useState(0);
   const [altitude, setAltitude] = useState(0);
   const [altTrend, setAltTrend] = useState<'up' | 'down' | 'flat'>('flat');
@@ -75,12 +79,11 @@ export default function DashboardScreen() {
 
   const lastAlt = useRef<number | null>(null);
   const lastPos = useRef<{ lat: number; lng: number } | null>(null);
+  const prevSpeedRef = useRef(0);
   const startTime = useRef<number>(Date.now());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const watchRef = useRef<Location.LocationSubscription | null>(null);
   const headingRef = useRef<Location.LocationSubscription | null>(null);
-  // Use ref for max speed comparison inside the subscription callback
-  // to avoid the effect restarting every time max speed updates (performance bug fix)
   const maxSpeedRef = useRef(0);
 
   // Shared values for the gauge arc
@@ -102,6 +105,24 @@ export default function DashboardScreen() {
     if (headingRef.current) { headingRef.current.remove(); headingRef.current = null; }
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   }, []);
+
+  const resetTrip = useCallback(() => {
+    stopTracking();
+    setSpeedKmh(0);
+    setSpeedTrend('flat');
+    setMaxSpeedKmh(0);
+    maxSpeedRef.current = 0;
+    prevSpeedRef.current = 0;
+    setAltitude(0);
+    setHeading(0);
+    setAccuracy(null);
+    setElapsed(0);
+    setTotalDistance(0);
+    setAltTrend('flat');
+    lastAlt.current = null;
+    lastPos.current = null;
+    setIsTracking(false);
+  }, [stopTracking]);
 
   useEffect(() => {
     let isActive = true;
@@ -128,6 +149,10 @@ export default function DashboardScreen() {
             // Speed
             const kph = speed != null && speed >= 0 ? speed * 3.6 : 0;
             setSpeedKmh(kph);
+            // Track acceleration trend
+            const kphDiff = kph - prevSpeedRef.current;
+            setSpeedTrend(kphDiff > 3 ? 'up' : kphDiff < -3 ? 'down' : 'flat');
+            prevSpeedRef.current = kph;
             // Use ref for comparison to avoid effect re-running (bug fix)
             if (kph > maxSpeedRef.current) {
               maxSpeedRef.current = kph;
@@ -175,6 +200,7 @@ export default function DashboardScreen() {
     } else {
       stopTracking();
       setSpeedKmh(0);
+      setSpeedTrend('flat');
     }
 
     const appState = AppState.addEventListener('change', (state) => {
@@ -193,11 +219,7 @@ export default function DashboardScreen() {
   }, [isTracking]); // Re-run when toggle changes
 
   // Arc gauge — draws a semi-circular progress arc using Views + transforms
-  const gaugeTickStyle = useAnimatedStyle(() => {
-    // The arc spans 240 degrees starting from 150° (bottom-left) to 390° (bottom-right)
-    const angle = gaugeProgress.value * 240 - 120; // -120 to +120 degrees from bottom
-    return {}; // Handled in SVG-like markup below
-  });
+  // Ticks and arc segments are rendered as positioned Views below (no Animated.View needed).
 
   // Build tick marks
   const renderTicks = () => {
@@ -322,6 +344,14 @@ export default function DashboardScreen() {
           {/* Center readout */}
           <View style={styles.gaugeCenter}>
             <MaterialCommunityIcons name="speedometer" size={28} color={colors.accent} style={{ marginBottom: 4 }} />
+            {speedTrend !== 'flat' && isTracking && (
+              <MaterialCommunityIcons
+                name={speedTrend === 'up' ? 'arrow-up-bold' : 'arrow-down-bold'}
+                size={14}
+                color={speedTrend === 'up' ? '#FF6B6B' : '#32cd32'}
+                style={{ marginBottom: 2 }}
+              />
+            )}
             <Text style={[styles.speedValue, { color: colors.text }]}>{Math.round(displaySpeed)}</Text>
             <Text style={[styles.speedUnit, { color: colors.textMuted }]}>{displayUnit}</Text>
           </View>
@@ -334,31 +364,41 @@ export default function DashboardScreen() {
       {/* Stats Grid */}
       <View style={styles.statsGrid}>
         {/* Altitude */}
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.surface, borderLeftColor: '#00E5FF', borderLeftWidth: 3 }]}>
           <MaterialCommunityIcons name={altTrendIcon} size={20} color={altTrendColor} />
           <Text style={[styles.statValue, { color: colors.text }]}>{altitude}<Text style={styles.statUnit}> m</Text></Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>Altitude</Text>
         </View>
 
         {/* Heading */}
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.surface, borderLeftColor: '#FFD700', borderLeftWidth: 3 }]}>
           <MaterialCommunityIcons name="compass-outline" size={20} color="#FFD700" />
           <Text style={[styles.statValue, { color: colors.text }]}>{getDirection(heading)}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>{heading}°</Text>
         </View>
 
         {/* GPS Accuracy */}
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.surface, borderLeftColor: accuracyColor, borderLeftWidth: 3 }]}>
           <MaterialCommunityIcons name="crosshairs-gps" size={20} color={accuracyColor} />
           <Text style={[styles.statValue, { color: colors.text }]}>{accuracyLabel}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>{accuracy != null ? `±${accuracy}m` : '—'}</Text>
         </View>
 
         {/* Total Distance */}
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.surface, borderLeftColor: '#A89BFF', borderLeftWidth: 3 }]}>
           <MaterialCommunityIcons name="map-marker-path" size={20} color="#A89BFF" />
           <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>{formatDistance(totalDistance)}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>Distance</Text>
+        </View>
+
+        {/* Avg Speed */}
+        <View style={[styles.statCard, styles.statCardFull, { backgroundColor: colors.surface, borderLeftColor: '#32cd32', borderLeftWidth: 3 }]}>
+          <MaterialCommunityIcons name="speedometer-medium" size={20} color="#32cd32" />
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {elapsed > 0 ? Math.round((totalDistance / elapsed) * 3.6 * (unit === 'mph' ? 0.621371 : 1)) : 0}
+            <Text style={styles.statUnit}> {unit === 'kmh' ? 'km/h' : 'mph'}</Text>
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Avg Speed</Text>
         </View>
       </View>
 
@@ -376,20 +416,30 @@ export default function DashboardScreen() {
         <MaterialCommunityIcons name="trophy-outline" size={36} color={isDark ? 'rgba(0,229,255,0.2)' : 'rgba(0,179,204,0.2)'} />
       </View>
 
-      {/* Action Button */}
-      <TouchableOpacity 
-        style={[styles.actionBtn, { backgroundColor: isTracking ? '#FF4444' : '#32cd32' }]} 
-        activeOpacity={0.8}
-        onPress={() => setIsTracking(!isTracking)}
-      >
-        <MaterialCommunityIcons name={isTracking ? 'stop' : 'play'} size={24} color="#fff" />
-        <Text style={styles.actionBtnText}>{isTracking ? 'PAUSE TRACKING' : 'START TRACKING'}</Text>
-      </TouchableOpacity>
+      {/* Action Buttons */}
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          style={[styles.resetBtn, { borderColor: colors.border }]}
+          activeOpacity={0.8}
+          onPress={resetTrip}
+        >
+          <MaterialCommunityIcons name="refresh" size={20} color={colors.textMuted} />
+          <Text style={[styles.resetBtnText, { color: colors.textMuted }]}>RESET</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionBtn, { backgroundColor: isTracking ? '#FF4444' : '#32cd32', flex: 1 }]}
+          activeOpacity={0.8}
+          onPress={() => setIsTracking(!isTracking)}
+        >
+          <MaterialCommunityIcons name={isTracking ? 'stop' : 'play'} size={24} color="#fff" />
+          <Text style={styles.actionBtnText}>{isTracking ? 'PAUSE TRACKING' : 'START TRACKING'}</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
   scrollContainer: {
     flex: 1,
   },
@@ -556,8 +606,36 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: 2,
   },
-  actionBtn: {
+  statCardFull: {
     width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    aspectRatio: undefined,
+    minHeight: 64,
+  },
+  actionRow: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    alignItems: 'stretch',
+  },
+  resetBtn: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    gap: 4,
+  },
+  resetBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+  },
+  actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

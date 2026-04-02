@@ -7,15 +7,18 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: false,
+    shouldSetBadge: true,
   }),
 });
 
-/** Channel ID for the 70-day "X days to go" daily beep notifications */
+/** Channel ID for the "X days to go" daily beep notifications */
 const DAILY_BEEP_CHANNEL = 'countdown-daily-beep-v2';
 
 /** Channel ID for milestone / general countdown reminders */
 const REMINDERS_CHANNEL = 'countdown-reminders-v2';
+
+/** Android notification group key so multiple notifications collapse together */
+const GROUP_KEY = 'countdown-reminders';
 
 export async function requestNotificationPermissions(): Promise<boolean> {
   if (Platform.OS === 'android') {
@@ -38,17 +41,16 @@ export async function requestNotificationPermissions(): Promise<boolean> {
     // screen and as a heads-up banner because importance is HIGH.
     await Notifications.setNotificationChannelAsync(DAILY_BEEP_CHANNEL, {
       name: 'Daily Countdown Beep',
-      importance: Notifications.AndroidImportance.HIGH, // lock screen + heads-up banner
-      vibrationPattern: [0, 100], // short single pulse
-      bypassDnd: false, // respect Do Not Disturb
-      sound: 'default', // system beep / ding — NOT a custom ringing alarm
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 100],
+      bypassDnd: false,
+      sound: 'default',
       audioAttributes: {
-        usage: Notifications.AndroidAudioUsage.NOTIFICATION, // beep, not alarm
+        usage: Notifications.AndroidAudioUsage.NOTIFICATION,
         contentType: Notifications.AndroidAudioContentType.SONIFICATION,
       },
       lightColor: '#6C63FF',
       showBadge: true,
-      // enableLights: true is default for HIGH importance
     });
   }
 
@@ -63,13 +65,11 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 }
 
 /**
- * Schedules one "X days to go" beep notification at 9:00 AM for each
- * remaining day before the target. Works for ANY countdown length.
+ * Schedules "X days to go" beep notifications at 9:00 AM for each
+ * remaining day before the target.
  *
- * Android hard cap is 500 scheduled notifications per app; we cap at 490
- * to leave 10 slots for completion notifications and other countdowns.
- *
- * Body counts down: "299 days to go", "298 days to go", …, "1 day to go"
+ * iOS cap: 30 notifications (leaves 34 slots for other apps within the 64 hard limit).
+ * Android cap: 490 notifications (out of 500 per-app limit).
  */
 async function scheduleDailyCountdownNotifications(
   countdown: Countdown,
@@ -79,7 +79,6 @@ async function scheduleDailyCountdownNotifications(
   const targetDate = new Date(countdown.targetDate);
 
   // Cap at 30 on iOS (OS limit is 64 total per app), 490 on Android (OS limit is 500).
-  // The last day (day-0) is always handled by the separate completion notification.
   const maxNotifications = Math.min(daysUntilTarget - 1, Platform.OS === 'ios' ? 30 : 490);
 
   for (let i = 1; i <= maxNotifications; i++) {
@@ -90,7 +89,7 @@ async function scheduleDailyCountdownNotifications(
     // Safety: never schedule on or after the target date
     if (fireDate >= targetDate) break;
 
-    const daysRemaining = daysUntilTarget - i; // e.g. 299, 298, … 1
+    const daysRemaining = daysUntilTarget - i;
     const dayWord = daysRemaining === 1 ? 'day' : 'days';
 
     const id = await Notifications.scheduleNotificationAsync({
@@ -99,13 +98,15 @@ async function scheduleDailyCountdownNotifications(
         body: `${daysRemaining} ${dayWord} to go`,
         data: { countdownId: countdown.id },
         sound: 'default',
-        interruptionLevel: 'timeSensitive',   // iOS: lock screen + banner over apps
+        interruptionLevel: 'timeSensitive',
         priority: Notifications.AndroidNotificationPriority.HIGH,
+        // Android: group notifications together
+        ...(Platform.OS === 'android' ? { groupKey: GROUP_KEY } : {}),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: fireDate,
-        channelId: DAILY_BEEP_CHANNEL,        // Android: beep channel
+        channelId: DAILY_BEEP_CHANNEL,
       } as Notifications.DateTriggerInput & { channelId?: string },
     });
 
@@ -117,9 +118,8 @@ async function scheduleDailyCountdownNotifications(
 
 /**
  * Schedules:
- * 1. A daily "X days to go" beep at 9:00 AM for every remaining day
- *    (any countdown length — 5 days, 100 days, 365 days, etc.)
- * 2. A one-time completion notification at the exact target date/time.
+ * 1. A daily "X days to go" beep at 9:00 AM for every remaining day (capped for platform limits)
+ * 2. A one-time completion notification at the exact target date/time
  *
  * Returns the notification IDs so they can be stored and cancelled later.
  */
@@ -140,7 +140,6 @@ export async function scheduleCountdownNotifications(
     const msPerDay = 1000 * 60 * 60 * 24;
     const daysUntilTarget = Math.ceil((targetDate.getTime() - now.getTime()) / msPerDay);
 
-    // Schedule daily "X days to go" beeps for every remaining day
     dailyNotificationIds = await scheduleDailyCountdownNotifications(countdown, daysUntilTarget);
 
     // Completion notification at the exact moment the countdown hits zero
@@ -152,6 +151,7 @@ export async function scheduleCountdownNotifications(
         sound: 'default',
         interruptionLevel: 'timeSensitive',
         priority: Notifications.AndroidNotificationPriority.MAX,
+        ...(Platform.OS === 'android' ? { groupKey: GROUP_KEY } : {}),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
@@ -162,7 +162,6 @@ export async function scheduleCountdownNotifications(
 
   } catch (e) {
     console.warn('Failed to schedule notifications:', e);
-    // Continue without notifications rather than breaking the save
   }
 
   return { dailyNotificationIds, completionNotificationId };

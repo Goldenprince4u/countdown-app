@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import {
   View,
   Text,
@@ -24,18 +25,20 @@ import {
   CATEGORIES,
   CATEGORY_COLORS,
   CATEGORY_LABELS,
+  ACCENT_COLORS,
   type CountdownCategory,
 } from '@/types/countdown';
 import { DarkAppColors, LightAppColors, Spacing, Radius } from '@/constants/theme';
 
-// We no longer require a minimum date buffer because we now support Count-Up milestone tracking for past dates.
+// Alarm duration options — capped at 60 s per the alarmDuration guard
+const ALARM_DURATION_OPTIONS = [15, 30, 60] as const;
 
 export default function AddCountdownModal() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { addCountdown, updateCountdown, countdowns } = useCountdownContext();
   const insets = useSafeAreaInsets();
-  
+
   const { effectiveTheme } = useThemeContext();
   const colors = effectiveTheme === 'dark' ? DarkAppColors : LightAppColors;
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -52,15 +55,22 @@ export default function AddCountdownModal() {
     d.setHours(9, 0, 0, 0);
     return d;
   });
-  const [category, setCategory]       = useState<CountdownCategory>(existing?.category ?? 'personal');
-  const [notifications, setNotifications] = useState(existing?.notificationsEnabled ?? true);
+  const [category, setCategory]             = useState<CountdownCategory>(existing?.category ?? 'personal');
+  const [notifications, setNotifications]   = useState(existing?.notificationsEnabled ?? true);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [saving, setSaving]           = useState(false);
+  const [saving, setSaving]                 = useState(false);
   const [backgroundImageUri, setBackgroundImageUri] = useState<string | undefined>(existing?.backgroundImageUri);
-  const [tempImageUri, setTempImageUri] = useState<string | undefined>(undefined);
+  const [tempImageUri, setTempImageUri]     = useState<string | undefined>(undefined);
   const [repeatInterval, setRepeatInterval] = useState<'yearly' | 'monthly' | 'weekly' | undefined>(existing?.repeatInterval);
-  const [alarmDuration, setAlarmDuration] = useState<number>(existing?.alarmDuration ?? 15);
+  // Alarm duration capped at 60 s
+  const [alarmDuration, setAlarmDuration]   = useState<number>(Math.min(existing?.alarmDuration ?? 15, 60));
+  // Custom accent color (overrides category default)
+  const [accentColor, setAccentColor]       = useState<string | undefined>(existing?.accentColor);
+
+  // Animated save button scale
+  const saveBtnScale = useSharedValue(1);
+  const saveBtnAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: saveBtnScale.value }] }));
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -104,6 +114,9 @@ export default function AddCountdownModal() {
       return;
     }
 
+    // Validate alarm duration
+    const clampedAlarm = Math.min(Math.max(1, alarmDuration), 60);
+
     setSaving(true);
     try {
       let finalImageUri = backgroundImageUri;
@@ -111,9 +124,9 @@ export default function AddCountdownModal() {
       // Copy to permanent storage only on save
       if (tempImageUri && backgroundImageUri === tempImageUri) {
         if (FileSystem.documentDirectory) {
-           const filename = Date.now() + '-' + (tempImageUri.split('/').pop() || 'photo.jpg');
-           finalImageUri = FileSystem.documentDirectory + filename;
-           await FileSystem.copyAsync({ from: tempImageUri, to: finalImageUri });
+          const filename = Date.now() + '-' + (tempImageUri.split('/').pop() || 'photo.jpg');
+          finalImageUri = FileSystem.documentDirectory + filename;
+          await FileSystem.copyAsync({ from: tempImageUri, to: finalImageUri });
         }
       }
 
@@ -130,7 +143,8 @@ export default function AddCountdownModal() {
         backgroundImageUri: finalImageUri,
         repeatInterval,
         notes: notes.trim() || undefined,
-        alarmDuration,
+        alarmDuration: clampedAlarm,
+        accentColor: accentColor || undefined,
       };
 
       if (isEditing && id) {
@@ -155,24 +169,39 @@ export default function AddCountdownModal() {
 
   return (
     <View style={[styles.safe, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
-      {/* ── Drag handle / top bar ── */}
+      {/* ── Top bar ── */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} id="modal-cancel">
+        <TouchableOpacity
+          onPress={() => router.back()}
+          id="modal-cancel"
+          accessibilityLabel="Cancel"
+          accessibilityRole="button">
           <Text style={styles.topBarCancel}>Cancel</Text>
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>{isEditing ? 'Edit Countdown' : 'New Countdown'}</Text>
-        <TouchableOpacity
-          onPress={handleSave}
-          disabled={saving}
-          id="modal-save"
-          style={[styles.saveBtn, saving && { opacity: 0.5 }]}>
-          <Text style={styles.saveBtnText}>Save</Text>
-        </TouchableOpacity>
+        <Animated.View style={saveBtnAnimStyle}>
+          <TouchableOpacity
+            onPress={() => {
+              saveBtnScale.value = withSpring(0.9, {}, () => { saveBtnScale.value = withSpring(1); });
+              handleSave();
+            }}
+            disabled={saving}
+            id="modal-save"
+            accessibilityLabel="Save countdown"
+            accessibilityRole="button"
+            style={[styles.saveBtn, saving && { opacity: 0.5 }]}>
+            <Text style={styles.saveBtnText}>Save</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+
         {/* ── Title ── */}
-        <Text style={styles.label}>Title</Text>
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>Title</Text>
+          <Text style={[styles.charCount, title.length >= 55 && { color: '#FF6B6B' }]}>{title.length}/60</Text>
+        </View>
         <TextInput
           id="countdown-title-input"
           style={styles.input}
@@ -182,9 +211,11 @@ export default function AddCountdownModal() {
           onChangeText={setTitle}
           maxLength={60}
           returnKeyType="next"
+          accessibilityLabel="Countdown title"
         />
 
-        {/* ── Notes (new) ── */}
+        {/* ── Notes ── */}
+        <View style={styles.sectionDivider} />
         <Text style={styles.label}>Notes (optional)</Text>
         <TextInput
           style={[styles.input, styles.notesInput]}
@@ -196,18 +227,27 @@ export default function AddCountdownModal() {
           multiline
           returnKeyType="done"
           blurOnSubmit
+          accessibilityLabel="Countdown notes"
         />
 
         {/* ── Background Photo ── */}
+        <View style={styles.sectionDivider} />
         <View style={styles.labelRow}>
           <Text style={styles.label}>Background Photo</Text>
           {backgroundImageUri && (
-            <TouchableOpacity onPress={() => setBackgroundImageUri(undefined)}>
+            <TouchableOpacity
+              accessibilityLabel="Remove background photo"
+              accessibilityRole="button"
+              onPress={() => setBackgroundImageUri(undefined)}>
               <Text style={styles.removeText}>Remove</Text>
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity style={styles.pickerBtn} onPress={pickImage}>
+        <TouchableOpacity
+          accessibilityLabel="Select background photo"
+          accessibilityRole="button"
+          style={styles.pickerBtn}
+          onPress={pickImage}>
           <Text style={styles.pickerIcon}>🖼️</Text>
           <Text style={[styles.pickerText, backgroundImageUri && { color: colors.accent }]}>
             {backgroundImageUri ? 'Photo Selected (Tap to change)' : 'Select Photo from Gallery'}
@@ -222,10 +262,46 @@ export default function AddCountdownModal() {
           />
         )}
 
+        {/* ── Accent Color ── */}
+        <View style={styles.sectionDivider} />
+        <Text style={styles.label}>Accent Color</Text>
+        <Text style={[styles.labelHint]}>Overrides the category color on your card</Text>
+        <View style={styles.colorRow}>
+          {/* "Auto" (no override) swatch */}
+          <TouchableOpacity
+            accessibilityLabel="Use category default color"
+            accessibilityRole="button"
+            onPress={() => setAccentColor(undefined)}
+            style={[
+              styles.colorSwatch,
+              { backgroundColor: CATEGORY_COLORS[category] },
+              !accentColor && styles.colorSwatchSelected,
+            ]}>
+            {!accentColor && <Text style={styles.colorTick}>✓</Text>}
+          </TouchableOpacity>
+          {ACCENT_COLORS.map(c => (
+            <TouchableOpacity
+              key={c}
+              accessibilityLabel={`Set accent color ${c}`}
+              accessibilityRole="button"
+              onPress={() => setAccentColor(c)}
+              style={[
+                styles.colorSwatch,
+                { backgroundColor: c },
+                accentColor === c && styles.colorSwatchSelected,
+              ]}>
+              {accentColor === c && <Text style={styles.colorTick}>✓</Text>}
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* ── Date ── */}
+        <View style={styles.sectionDivider} />
         <Text style={styles.label}>Target Date</Text>
         <TouchableOpacity
           id="date-picker-btn"
+          accessibilityLabel={`Target date: ${dateLabel}`}
+          accessibilityRole="button"
           style={styles.pickerBtn}
           onPress={() => setShowDatePicker(true)}>
           <Text style={styles.pickerIcon}>📅</Text>
@@ -237,7 +313,10 @@ export default function AddCountdownModal() {
             <View style={styles.modalOverlay}>
               <View style={styles.pickerContainer}>
                 <View style={styles.pickerHeader}>
-                  <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <TouchableOpacity
+                    accessibilityLabel="Done selecting date"
+                    accessibilityRole="button"
+                    onPress={() => setShowDatePicker(false)}>
                     <Text style={styles.pickerDoneBtn}>Done</Text>
                   </TouchableOpacity>
                 </View>
@@ -267,6 +346,8 @@ export default function AddCountdownModal() {
         <Text style={styles.label}>Target Time</Text>
         <TouchableOpacity
           id="time-picker-btn"
+          accessibilityLabel={`Target time: ${timeLabel}`}
+          accessibilityRole="button"
           style={styles.pickerBtn}
           onPress={() => setShowTimePicker(true)}>
           <Text style={styles.pickerIcon}>🕐</Text>
@@ -278,7 +359,10 @@ export default function AddCountdownModal() {
             <View style={styles.modalOverlay}>
               <View style={styles.pickerContainer}>
                 <View style={styles.pickerHeader}>
-                  <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                  <TouchableOpacity
+                    accessibilityLabel="Done selecting time"
+                    accessibilityRole="button"
+                    onPress={() => setShowTimePicker(false)}>
                     <Text style={styles.pickerDoneBtn}>Done</Text>
                   </TouchableOpacity>
                 </View>
@@ -305,6 +389,7 @@ export default function AddCountdownModal() {
         )}
 
         {/* ── Category ── */}
+        <View style={styles.sectionDivider} />
         <Text style={styles.label}>Category</Text>
         <View style={styles.categoryGrid}>
           {CATEGORIES.map(cat => {
@@ -314,6 +399,8 @@ export default function AddCountdownModal() {
               <TouchableOpacity
                 key={cat}
                 id={`category-${cat}`}
+                accessibilityLabel={`Category: ${cat}`}
+                accessibilityRole="button"
                 onPress={() => setCategory(cat)}
                 style={[
                   styles.categoryChip,
@@ -329,15 +416,18 @@ export default function AddCountdownModal() {
         </View>
 
         {/* ── Repeat Options ── */}
+        <View style={styles.sectionDivider} />
         <Text style={styles.label}>Repeat Countdown</Text>
         <View style={styles.categoryGrid}>
-          {[undefined, 'weekly', 'monthly', 'yearly'].map(interval => {
+          {([undefined, 'weekly', 'monthly', 'yearly'] as const).map(interval => {
             const isSelected = repeatInterval === interval;
             const label = interval ? interval.charAt(0).toUpperCase() + interval.slice(1) : 'None';
             return (
               <TouchableOpacity
                 key={interval ?? 'none'}
-                onPress={() => setRepeatInterval(interval as any)}
+                accessibilityLabel={`Repeat: ${label}`}
+                accessibilityRole="button"
+                onPress={() => setRepeatInterval(interval)}
                 style={[
                   styles.categoryChip,
                   { borderColor: isSelected ? colors.accent : colors.border },
@@ -351,15 +441,18 @@ export default function AddCountdownModal() {
           })}
         </View>
 
-        {/* ── Alarm Duration ── */}
+        {/* ── Alarm Duration (max 60 s) ── */}
+        <View style={styles.sectionDivider} />
         <Text style={styles.label}>Alarm Duration</Text>
         <View style={styles.categoryGrid}>
-          {([15, 30, 60, 180] as const).map(secs => {
+          {ALARM_DURATION_OPTIONS.map(secs => {
             const isSelected = alarmDuration === secs;
             const label = secs < 60 ? `${secs}s` : `${secs / 60}m`;
             return (
               <TouchableOpacity
                 key={secs}
+                accessibilityLabel={`Alarm duration: ${label}`}
+                accessibilityRole="button"
                 onPress={() => setAlarmDuration(secs)}
                 style={[
                   styles.categoryChip,
@@ -375,6 +468,7 @@ export default function AddCountdownModal() {
         </View>
 
         {/* ── Notifications ── */}
+        <View style={styles.sectionDivider} />
         <View style={styles.switchRow}>
           <View>
             <Text style={styles.switchLabel}>Daily Notifications</Text>
@@ -385,6 +479,7 @@ export default function AddCountdownModal() {
             onValueChange={setNotifications}
             trackColor={{ false: colors.surfaceAlt, true: colors.accent }}
             thumbColor="#fff"
+            accessibilityLabel="Toggle daily notifications"
           />
         </View>
       </ScrollView>
@@ -422,8 +517,8 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
     borderRadius: Radius.full,
   },
   saveBtnText: {
-    color: '#fff',
-    fontWeight: '700',
+    color: colors.bg,
+    fontWeight: '800',
     fontSize: 15,
   },
   content: {
@@ -448,6 +543,13 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
     marginTop: Spacing.md,
     marginBottom: 6,
   },
+  labelHint: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: -4,
+    marginBottom: 8,
+    opacity: 0.7,
+  },
   removeText: {
     color: colors.textMuted,
     fontSize: 13,
@@ -470,9 +572,23 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
   },
   imagePreview: {
     width: '100%',
-    height: 120,
+    height: 180,
     borderRadius: Radius.md,
     marginTop: Spacing.sm,
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
+    opacity: 0.6,
+  },
+  charCount: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 6,
+    alignSelf: 'flex-end',
   },
   pickerBtn: {
     backgroundColor: colors.surface,
@@ -491,6 +607,35 @@ const createStyles = (colors: typeof DarkAppColors) => StyleSheet.create({
   pickerText: {
     color: colors.text,
     fontSize: 16,
+  },
+  colorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  colorSwatch: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorSwatchSelected: {
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  colorTick: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '900',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowRadius: 3,
   },
   categoryGrid: {
     flexDirection: 'row',

@@ -48,7 +48,15 @@
           "sounds": []
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to access your location to calculate the Qiblah direction. This is only used while the app is active.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
