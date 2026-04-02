@@ -511,7 +511,7 @@ export default function WaypointScreen() {
             overlaps the sheet and hides the title + input, leaving only icons visible. */}
         <KeyboardAvoidingView
           style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior="padding"
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
         >
           <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
